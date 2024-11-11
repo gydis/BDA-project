@@ -1,0 +1,143 @@
+---
+title: "CS-E5710 Bayesian Data Analysis - PROJECT NAME HERE" # TODO: project name here
+author: "Egor Eremin & Tam Nguyen"
+output: 
+  pdf_document:
+    toc: yes
+    toc_depth: 1
+urlcolor: blue
+editor_options: 
+  markdown: 
+    wrap: 72
+---
+
+```{r include=FALSE, results='hide'}
+# Install/import packages
+if (!require(tidybayes)) {
+    install.packages("tidybayes")
+    library(tidybayes)
+}
+
+if (!require(brms)) {
+    install.packages("brms")
+    library(brms)
+}
+
+if(!require(ggplot2)){
+    install.packages("ggplot2")
+    library(ggplot2)
+}
+
+if(!require(cmdstanr)){
+    install.packages("cmdstanr", repos = c("https://mc-stan.org/r-packages/", getOption("repos")))
+    library(cmdstanr)
+}
+cmdstan_installed <- function(){
+  res <- try(out <- cmdstanr::cmdstan_path(), silent = TRUE)
+  !inherits(res, "try-error")
+}
+if(!cmdstan_installed()){
+    install_cmdstan()
+}
+```
+
+```{r include=FALSE, results='hide'}
+# General settings (e.g., seed, package options setting)
+set.seed(42)
+```
+
+```{r}
+# TODO: check report outline against rubric in
+# https://avehtari.github.io/BDA_course_Aalto/project_work/rubric.pdf
+```
+
+# 1. Introduction
+
+- Motivation
+- Problem definition
+- Modelling idea
+
+Some illustrative figures here.
+
+# 2. Data Description and Problem Analysis
+
+1. Data description:
+  - Source from Statistics Finland
+  - Describe precisely which table from stats.fi
+  - Briefly describe data gathering and pre-processing:
+    - Download with Python via some API calls
+    - Merge dataframes and drop NaNs
+  - Describe data:
+    - How many years of data?
+    - How many features?
+    - What is the target?
+  - Post-processing: any normalization/standardization?
+2. Problem Analysis:
+  - Not aware of any existing studies/analyses?
+  
+# 3. Model description
+
+## 3.1 Model 1 - Linear Regression?
+
+## 3.2 Model 2 - AR(1)?
+
+## 3.3 Model 3 - ARR2?
+
+# 4. Prior justification
+
+Priors for all models, and justify the prior choices (informative, weakly
+informative)
+
+# 5. brms/rstanarm/Stan code
+
+Source code for all models
+
+# 6. MCMC inference
+
+How the MCMC inference was run, i.e., what options were used:
+- command to run MCMC inference
+- a textual explanation of the choice of options
+
+For all models
+
+# 7. Convergence diagnosis
+
+R-squared, ESS, divergences. Interpretation of these values.
+
+If convergence was not good, what did we do to improve?
+
+For all models
+
+# 8. Posterior predictive checks
+
+What can be interpreted? What was done if the checks indicated misspecifications?
+
+For all models
+
+# 9. Predictive performance assessment
+
+Absolute error? Relative error? Quantify performance
+
+For all models
+
+# 10. Sensitivity analysis
+
+Checking whether the result changes a lot if prior is changed
+
+For all models
+
+# 11. Model comparison (e.g. with LOO-CV)
+
+# 12. Discussion of issues and potential improvements
+
+# 13. Conclusion what was learned from the data analysis
+
+# 14. Self-reflection of what the group learned while making the project
+
+
+
+
+
+
+
+
