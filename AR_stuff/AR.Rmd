@@ -1,0 +1,196 @@
+```{r include=FALSE, results='hide'}
+# Install/import packages
+if (!require(tidybayes)) {
+    install.packages("tidybayes")
+    library(tidybayes)
+}
+
+if (!require(forecast)) {
+    install.packages("forecast")
+    library(forecast)
+}
+
+if (!require(freqdom)) {
+    install.packages("freqdom")
+    library(freqdom)
+}
+
+if (!require(brms)) {
+    install.packages("brms")
+    library(brms)
+}
+
+if(!require(ggplot2)){
+    install.packages("ggplot2")
+    library(ggplot2)
+}
+
+if(!require(bayesplot)){
+    install.packages("bayesplot")
+    library(bayesplot)
+}
+
+if(!require(cmdstanr)){
+    install.packages("cmdstanr", repos = c("https://mc-stan.org/r-packages/", getOption("repos")))
+    library(cmdstanr)
+}
+cmdstan_installed <- function(){
+  res <- try(out <- cmdstanr::cmdstan_path(), silent = TRUE)
+  !inherits(res, "try-error")
+}
+if(!cmdstan_installed()){
+    install_cmdstan()
+}
+```
+
+```{r include=FALSE, results='hide'}
+# General settings (e.g., seed, package options setting)
+set.seed(42)
+```
+
+Some helper functions from the time series course
+```{r}
+# Define some helper functions
+
+#' Plot autocorrelation and partial autocorrelation of time series
+#'
+#' @param data_ts Time series as a ts object.
+#' @param lagmax Provides value for lag.max argument of acf and pacf.
+plot_acf <- function(data_ts, lagmax = NULL) {
+  par(mfrow = c(1, 2))
+  acf(data_ts, main = "ACF", lag.max = lagmax)
+  pacf(data_ts, main = "PACF", lag.max = lagmax)
+  par(mfrow = c(1, 1))
+}
+
+#' Perform Ljung-Box test
+#'
+#' Calculates p-values for Ljung-Box test for lags {k+1, ..., n}, where k
+#' is the number of model parameters.
+#'
+#' @param model Object of class Arima, represents the fitted model.
+#' @param k Number of model parameters.
+#' @param n Sample size (length of the time series).
+#'
+#' @return Vector of p-values.
+box_test <- function(model, k, n) {
+  pvalues <- c(rep(NA, n - k - 1))
+  for (i in 1:(n - k - 1)) {
+    pvalues[i] <- Box.test(model$res, lag = i + k, fitdf = k,
+                           type = "Ljung-Box")$p.value
+  }
+  pvalues
+}
+
+#' Plot p-values from Ljung-box test for different lags
+#'
+#' @param pvalues Vector of p-values.
+#' @param alpha Significance level.
+#' @param k Number of model parameters.
+#' @param n Sample size (length of the time series).
+plot_pvalues <- function(pvalues, alpha, k, n) {
+  plot((k + 1):(n - 1), pvalues, pch = 16, col = "midnightblue",
+       ylim = c(0, max(pvalues)), xlab = "lag", ylab = "p-value")
+  abline(h = alpha, lty = 2, lwd = 2)
+}
+
+#' Plot original time series and fitted model.
+#'
+#' @param data_ts Time series as ts object.
+#' @param model Fitted time series model as Arima object.
+#'
+plot_fit <- function(data_ts, model) {
+  fit <- model$fitted
+  plot(fit, type = "b", col = "blue", ylab = "Value", xlab = "Time", cex = 0.5,
+       pch = 16, main = "")
+  lines(data_ts, col = "red", type = "b", cex = 0.5, pch = 16)
+  legend("topleft", legend = c("Time series", "Fit"), col = c("red", "blue"),
+         lty = c(1, 1), cex = 0.5)
+}
+
+#' Plot original time series and s-step prediction.
+#'
+#' @param data_ts Time series as ts object.
+#' @param prediction S-step prediction as ts object.
+plot_pred <- function(data_ts, prediction, title = "", xlim = NULL,
+                      ylim = NULL) {
+  plot(data_ts, col = "red", type = "b", cex = 0.5, pch = 16, ylab = "Value",
+       xlab = "Time", main = title, xlim = xlim, ylim = ylim)
+  lines(prediction, col = "blue", type = "b", cex = 0.5, pch = 16)
+  legend("topleft", legend = c("Time series", "Prediction"),
+         col = c("red", "blue"), lty = c(1, 1), cex = 0.5)
+}
+```
+
+```{r}
+library(readr)
+combined <- read_csv("data_processing/data/combined.csv")
+names(combined) <- c("year", "renewable", "hydro", "wind", "wood", "other_renewable", "fossil", "oil", "coal", "gas", "peat", "other_fossil", "nuclear", "import", "other", "renewable_share", "co2", "co2_equivalent", "co2_lifecycle")
+```
+
+```{r}
+ggplot(combined, aes(x = year, y = co2)) + 
+  geom_point(size = 1) +
+  labs(
+    y = "CO2 coefficient", 
+    x = "Year"
+  ) 
+```
+
+```{r}
+co2_ts_orig <- ts(combined$co2, start=combined$year[1], end=combined$year[length(combined$year)])
+co2_ts <- co2_ts_orig
+co2_ts <- diff(co2_ts, differences=1)
+
+plot(co2_ts)
+plot_acf(co2_ts)
+```
+Seems that difference of 1 makes the series stationary, and the (2,2) model should work. 
+```{r}
+model <- Arima(co2_ts_orig, order=c(2,1,2), seasonal=c(0,0,0))
+model
+plot_fit(co2_ts_orig, model)
+```
+Not too good, but let's see how bayesian would do.
+
+```{r}
+#data <- data.frame(year=combined$year[-1], co2=co2_ts)
+data <- combined
+```
+
+```{r}
+formula <- bf(co2 ~ ar(time = year, p=2), family="Gaussian")
+get_prior(formula, data=data)
+ar_priors <- c(
+  prior(normal(0, 1), 
+        class = "ar")
+  )
+```
+```{r}
+fit <- brm(formula = formula, prior = ar_priors, data=data, control = list(adapt_delta=0.9), iter = 10000)
+summary(fit)
+```
+
+```{r}
+np <- nuts_params(fit)
+mcmc_pairs(as.array(fit), np = np)
+```
+```{r}
+preds <- posterior_predict(fit, ndraws=2000)
+preds <- cbind(
+  Estimate = colMeans(preds), 
+  Q5 = apply(preds, 2, quantile, probs = 0.05),
+  Q95 = apply(preds, 2, quantile, probs = 0.95)
+)
+ggplot(cbind(data, preds), aes(x = year, y = Estimate)) +
+  geom_smooth(aes(ymin = Q5, ymax = Q95), stat = "identity", linewidth = 0.5) +
+  geom_point(aes(y = co2)) + 
+  labs(
+    y = "co2", 
+    x = "Year"
+  ) 
+```
+
+```{r}
+cumsum(preds)
+```
