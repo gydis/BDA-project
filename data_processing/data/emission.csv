@@ -1,4 +1,4 @@
-Year,Share of renewable electricity generation (%),CO2 emission coefficient for electricity generation (g CO2/kWh),CO2-equivalent emission coefficient for electricity generation (g CO2 eq./kWh),"Life cycle emission coefficient for electricity generation, (g CO2 eq./kWh)"
+Year,RenewableGenerationShare,CO2Emission,CO2EquivEmission,LifeCycleEmission
 2000,33.7,174,176,203
 2001,29.3,218.1,220.5,250.5
 2002,26.8,241.4,243.9,277.9
