@@ -1,0 +1,174 @@
+---
+title: "CS-E5710 Bayesian Data Analysis - PROJECT NAME HERE" # TODO: project name here
+author: "Egor Eremin & Tam Nguyen"
+output: 
+  pdf_document:
+    toc: yes
+    toc_depth: 1
+urlcolor: blue
+editor_options: 
+  markdown: 
+    wrap: 72
+---
+
+```{r include=FALSE, results='hide'}
+# Install/import packages
+library(readr)
+
+if (!require(tidybayes)) {
+    install.packages("tidybayes")
+    library(tidybayes)
+}
+
+if (!require(brms)) {
+    install.packages("brms")
+    library(brms)
+}
+
+if(!require(ggplot2)){
+    install.packages("ggplot2")
+    library(ggplot2)
+}
+
+if(!require(cmdstanr)){
+    install.packages("cmdstanr", repos = c("https://mc-stan.org/r-packages/", getOption("repos")))
+    library(cmdstanr)
+}
+cmdstan_installed <- function(){
+  res <- try(out <- cmdstanr::cmdstan_path(), silent = TRUE)
+  !inherits(res, "try-error")
+}
+if(!cmdstan_installed()){
+    install_cmdstan()
+}
+
+```
+
+```{r include=FALSE, results='hide'}
+# General settings (e.g., seed, package options setting)
+seed <- 42
+
+set.seed(seed)
+```
+
+
+```{r}
+emission <- read_csv("./lin_reg_data.csv", show_col_types = FALSE)
+head(emission)
+```
+
+# 3 & 4. Model description & priors: Linear Regression
+
+$$
+\text{LifeCycleEmission} = \alpha + \beta \cdot \text{RenewableProductionShare}
+$$
+
+# 5. brms/Stan code
+
+```{r}
+lin_reg_formula <- bf(
+  LifeCycleEmission ~ 1 + RenewableProductionShare,
+  family = "gaussian",
+  center = FALSE
+)
+```
+
+```{r}
+get_prior(lin_reg_formula, data = emission)
+```
+
+```{r}
+(lin_reg_priors <- c(
+  prior(normal(0, 300), class = "b", coef = "Intercept"),  # Intercept prior
+  prior(normal(0, 100), class = "b", coef = "RenewableProductionShare"),  # Slope prior
+  prior(normal(0, 100), class = "sigma")  # Residual standard deviation prior
+))
+```
+
+# 6. MCMC inference
+
+How the MCMC inference was run, i.e., what options were used:
+- command to run MCMC inference
+- a textual explanation of the choice of options
+
+```{r}
+lin_reg_fit <- brm(
+  formula = lin_reg_formula,
+  prior = lin_reg_priors,
+  data = emission,
+  iter = 2000,
+  warmup = 1000,
+  chains = 4,
+  seed = seed
+)
+```
+
+# 7. Convergence diagnosis
+
+Interpretation of these values:
+- R-hat convergence diagnostics
+- HMC specific convergence diagnostics (divergences, tree depth)
+- ESS diagnostics
+
+If convergence was not good, what did we do to improve?
+
+```{r}
+summary(lin_reg_fit)
+# TODO: how to plot the trace plots to see if the chains converged?
+```
+
+
+# 8. Posterior predictive checks
+
+What can be interpreted? What was done if the checks indicated misspecifications?
+
+```{r}
+pp_check(lin_reg_fit)
+```
+
+# 9. Predictive performance assessment
+
+Absolute error? Relative error? Quantify performance
+
+```{r}
+# Extract posterior predictions
+predictions <- posterior_epred(lin_reg_fit)
+
+# Calculate quantiles
+pred_quantiles <- apply(predictions, 2, quantile, probs = c(0.05, 0.5, 0.95))
+
+# Create a data frame for plotting
+plot_data <- data.frame(
+  RenewableProductionShare = emission$RenewableProductionShare,
+  LifeCycleEmission = emission$LifeCycleEmission,
+  q5 = pred_quantiles[1, ],
+  q50 = pred_quantiles[2, ],
+  q95 = pred_quantiles[3, ]
+)
+
+# Plot
+ggplot(plot_data, aes(x = RenewableProductionShare, y = LifeCycleEmission)) +
+  geom_point(color = "blue") +
+  geom_line(aes(y = q50), color = "red") +
+  geom_ribbon(aes(ymin = q5, ymax = q95), alpha = 0.2) +
+  labs(y = "Life Cycle Emission", x = "Renewable Production Share") +
+  theme_minimal()
+```
+
+
+
+# 10. Sensitivity analysis
+
+Checking whether the result changes a lot if prior is changed
+
+
+# 11. Model comparison (e.g. with LOO-CV)
+
+```{r}
+lin_reg_fit <- add_criterion(
+  lin_reg_fit,
+  criterion = "loo"
+)
+
+loo(lin_reg_fit)
+```

@@ -46,11 +46,6 @@ if(!cmdstan_installed()){
 set.seed(42)
 ```
 
-```{r}
-# TODO: check report outline against rubric in
-# https://avehtari.github.io/BDA_course_Aalto/project_work/rubric.pdf
-```
-
 # 1. Introduction
 
 - Motivation
@@ -102,7 +97,11 @@ For all models
 
 # 7. Convergence diagnosis
 
-R-squared, ESS, divergences. Interpretation of these values.
+- R-hat convergence diagnostics
+- HMC specific convergence diagnostics (divergences, tree depth)
+- ESS diagnostics
+
+Interpretation of these values.
 
 If convergence was not good, what did we do to improve?
 
