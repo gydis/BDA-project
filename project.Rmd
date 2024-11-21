@@ -76,7 +76,7 @@ Some illustrative figures here.
 
 ## 3.2 Model 2 - AR(1)?
 
-## 3.3 Model 3 - ARR2?
+## 3.3 Combination of time-series and covariates
 
 # 4. Prior justification
 
@@ -113,11 +113,21 @@ What can be interpreted? What was done if the checks indicated misspecifications
 
 For all models
 
+pp_check(fit)
+- include for linear regression models
+- temporarily include for time-series models. TODO: confirm with TA about intuition
+
 # 9. Predictive performance assessment
 
 Absolute error? Relative error? Quantify performance
 
 For all models
+
+pp_check(fit, type = "ribbon")
+
+R2, two options: TODO: after we finish other necessary parts of the report
+- one numerical result from the mean of posterior predictive distribution -> R2
+- draw from posterior, calculate R2 of the draw -> R2 distribution
 
 # 10. Sensitivity analysis
 
@@ -125,7 +135,11 @@ Checking whether the result changes a lot if prior is changed
 
 For all models
 
+Fit with different priors, plot the posterior distributions (Exercise 2.)
+
 # 11. Model comparison (e.g. with LOO-CV)
+
+ TODO: LFO code and ELPD for all models
 
 # 12. Discussion of issues and potential improvements
 
