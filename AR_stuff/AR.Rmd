@@ -124,12 +124,12 @@ plot_pred <- function(data_ts, prediction, title = "", xlim = NULL,
 
 ```{r}
 library(readr)
-combined <- read_csv("data_processing/data/combined.csv")
+combined <- read_csv("../data_processing/data/combined.csv")
 names(combined) <- c("year", "renewable", "hydro", "wind", "wood", "other_renewable", "fossil", "oil", "coal", "gas", "peat", "other_fossil", "nuclear", "import", "other", "renewable_share", "co2", "co2_equivalent", "co2_lifecycle")
 ```
 
 ```{r}
-ggplot(combined, aes(x = year, y = co2)) + 
+ggplot(combined, aes(x = year, y = co2_lifecycle)) + 
   geom_point(size = 1) +
   labs(
     y = "CO2 coefficient", 
@@ -138,7 +138,7 @@ ggplot(combined, aes(x = year, y = co2)) +
 ```
 
 ```{r}
-co2_ts_orig <- ts(combined$co2, start=combined$year[1], end=combined$year[length(combined$year)])
+co2_ts_orig <- ts(combined$co2_lifecycle, start=combined$year[1], end=combined$year[length(combined$year)])
 co2_ts <- co2_ts_orig
 co2_ts <- diff(co2_ts, differences=1)
 
@@ -147,7 +147,7 @@ plot_acf(co2_ts)
 ```
 Seems that difference of 1 makes the series stationary, and the (2,2) model should work. 
 ```{r}
-model <- Arima(co2_ts_orig, order=c(2,1,2), seasonal=c(0,0,0))
+model <- Arima(co2_ts_orig, order=c(0,1,0), seasonal=c(0,0,0))
 model
 plot_fit(co2_ts_orig, model)
 ```
@@ -159,15 +159,17 @@ data <- combined
 ```
 
 ```{r}
-formula <- bf(co2 ~ ar(time = year, p=2), family="Gaussian")
+formula <- bf(co2 ~ renewable_share + ar(time = year, p=2), family="Gaussian")
 get_prior(formula, data=data)
 ar_priors <- c(
-  prior(normal(0, 1), 
-        class = "ar")
+  prior(normal(0, 0.5), 
+        class = "ar"),
+  prior(normal(0, 2),
+        coef="renewable_share")
   )
 ```
 ```{r}
-fit <- brm(formula = formula, prior = ar_priors, data=data, control = list(adapt_delta=0.9), iter = 10000)
+fit <- brm(formula = formula, prior = ar_priors, data=data, iter = 10000)
 summary(fit)
 ```
 
@@ -190,7 +192,14 @@ ggplot(cbind(data, preds), aes(x = year, y = Estimate)) +
     x = "Year"
   ) 
 ```
+```{r}
+pp_check(fit, type="ribbon", ndraws=2000)
+```
 
 ```{r}
-cumsum(preds)
+pp_check(fit, type="loo_pit_qq", moment_match=TRUE, reloo=TRUE)
+```
+
+```{r}
+hist(predictive_error(fit))
 ```
