@@ -20,6 +20,11 @@ if (!require(brms)) {
     library(brms)
 }
 
+if (!require(loo)) {
+  install.packages("loo")
+  library(loo)
+}
+
 if(!require(ggplot2)){
     install.packages("ggplot2")
     library(ggplot2)
@@ -125,7 +130,7 @@ plot_pred <- function(data_ts, prediction, title = "", xlim = NULL,
 ```{r}
 library(readr)
 combined <- read_csv("../data_processing/data/combined.csv")
-names(combined) <- c("year", "renewable", "hydro", "wind", "wood", "other_renewable", "fossil", "oil", "coal", "gas", "peat", "other_fossil", "nuclear", "import", "other", "renewable_share", "co2", "co2_equivalent", "co2_lifecycle")
+names(combined) <- c("year", "renewable", "hydro", "wind", "wood", "other_renewable", "fossil", "oil", "coal", "gas", "peat", "other_fossil", "nuclear", "import", "other", "renewable_prod", "fossil_peat_prod", "nuclear_prod", "net_import", "others_prod", "renewable_gen", "co2", "co2_equivalent", "co2_lifecycle")
 ```
 
 ```{r}
@@ -140,7 +145,7 @@ ggplot(combined, aes(x = year, y = co2_lifecycle)) +
 ```{r}
 co2_ts_orig <- ts(combined$co2_lifecycle, start=combined$year[1], end=combined$year[length(combined$year)])
 co2_ts <- co2_ts_orig
-co2_ts <- diff(co2_ts, differences=1)
+#co2_ts <- diff(co2_ts, differences=1)
 
 plot(co2_ts)
 plot_acf(co2_ts)
@@ -159,13 +164,13 @@ data <- combined
 ```
 
 ```{r}
-formula <- bf(co2 ~ renewable_share + ar(time = year, p=2), family="Gaussian")
+formula <- bf(co2 ~ renewable_prod + ar(time = year, p=1), family="Gaussian")
 get_prior(formula, data=data)
 ar_priors <- c(
   prior(normal(0, 0.5), 
         class = "ar"),
   prior(normal(0, 2),
-        coef="renewable_share")
+        coef="renewable_prod")
   )
 ```
 ```{r}
@@ -201,5 +206,232 @@ pp_check(fit, type="loo_pit_qq", moment_match=TRUE, reloo=TRUE)
 ```
 
 ```{r}
+pp_check(fit, ndraws=100)
+```
+
+```{r}
 hist(predictive_error(fit))
+```
+```{r}
+# some helper functions we'll use throughout
+
+# more stable than log(sum(exp(x))) 
+log_sum_exp <- function(x) {
+  max_x <- max(x)  
+  max_x + log(sum(exp(x - max_x)))
+}
+
+# more stable than log(mean(exp(x)))
+log_mean_exp <- function(x) {
+  log_sum_exp(x) - log(length(x))
+}
+
+# compute log of raw importance ratios
+# sums over observations *not* over posterior samples
+sum_log_ratios <- function(loglik, ids = NULL) {
+  if (!is.null(ids)) loglik <- loglik[, ids, drop = FALSE]
+  rowSums(loglik)
+}
+
+# for printing comparisons later
+rbind_print <- function(...) {
+  round(rbind(...), digits = 2)
+}
+
+lfo_M <- function(fit, L, M, data) {
+  df <- data
+  # L is the number of data points left in the beginning for training
+  N <- length(data$co2)
+  loo_cv <- loo(log_lik(fit)[, (L + 1):N])
+  loglik_exact <- matrix(nrow = ndraws(fit), ncol = N)
+  loglikm <- matrix(nrow = ndraws(fit), ncol = N)
+for (i in L:(N - M)) {
+  past <- 1:i
+  oos <- (i + 1):(i + M)
+  df_past <- df[past,]
+  df_oos <- df[c(past, oos),]
+  fit_past <- update(fit, newdata = df_past, recompile = FALSE, refresh=0)
+  loglik <- log_lik(fit_past, newdata = df_oos, oos = oos)
+  loglikm[, i + 1] <- rowSums(loglik[, oos])
+}
+  
+  exact_elpds <- apply(loglikm, 2, log_mean_exp)
+  (exact_elpd <- c(ELPD = sum(exact_elpds, na.rm = TRUE)))
+  
+  rbind_print(
+    "LOO" = loo_cv$estimates["elpd_loo", "Estimate"],
+    "LFO" = exact_elpd
+  )
+}
+```
+```{r}
+pareto_lfo_M <- function(fit, L, M, data) {
+  df <- data
+  plot_ks <- function(ks, ids, thres = 0.6) {
+  dat_ks <- data.frame(ks = ks, ids = ids)
+  ggplot(dat_ks, aes(x = ids, y = ks)) + 
+    geom_point(aes(color = ks > thres), shape = 3, show.legend = FALSE) + 
+    geom_hline(yintercept = thres, linetype = 2, color = "red2") + 
+    scale_color_manual(values = c("cornflowerblue", "darkblue")) + 
+    labs(x = "Data point", y = "Pareto k") + 
+    ylim(-0.5, 1.5)
+}
+  
+  N <- length(data$co2)
+  loo_cv <- loo(log_lik(fit)[, (L + 1):N])
+  k_thres <- 0.7
+  approx_elpds_4sap <- rep(NA, N)
+
+  past <- 1:L
+  oos <- (L + 1):(L + M)
+  df_past <- df[past,]
+  df_oos <- df[c(past, oos),]
+  fit_past <- update(fit, newdata = df_past, recompile = FALSE, refresh =0)
+  loglik <- log_lik(fit_past, newdata = df_oos, oos = oos)
+  loglikm <- rowSums(loglik[, oos])
+  approx_elpds_4sap[L + 1] <- log_mean_exp(loglikm)
+  
+  # iterate over i > L
+  i_refit <- L
+  refits <- L
+  ks <- NULL
+  for (i in (L + 1):(N - M)) {
+    past <- 1:i
+    oos <- (i + 1):(i + M)
+    df_past <- df[past, ]
+    df_oos <- df[c(past, oos),]
+    loglik <- log_lik(fit_past, newdata = df_oos, oos = oos)
+    
+    logratio <- sum_log_ratios(loglik, (i_refit + 1):i)
+    psis_obj <- suppressWarnings(psis(logratio))
+    k <- pareto_k_values(psis_obj)
+    ks <- c(ks, k)
+    if (k > k_thres) {
+      # refit the model based on the first i observations
+      i_refit <- i
+      refits <- c(refits, i)
+      fit_past <- update(fit_past, newdata = df_past, recompile = FALSE, refresh=0)
+      loglik <- log_lik(fit_past, newdata = df_oos, oos = oos)
+      loglikm <- rowSums(loglik[, oos])
+      approx_elpds_4sap[i + 1] <- log_mean_exp(loglikm)
+    } else {
+      lw <- weights(psis_obj, normalize = TRUE)[, 1]
+      loglikm <- rowSums(loglik[, oos])
+      approx_elpds_4sap[i + 1] <- log_sum_exp(lw + loglikm)
+    }
+  } 
+    approx_elpd <- sum(approx_elpds_4sap, na.rm = TRUE)
+    cat(
+    "approx LFO ", approx_elpd, "\n"
+    )
+    cat("Using threshold ", k_thres, 
+      ", model was refit ", length(refits), 
+      " times, at observations", refits)
+    plot_ks(ks, (L + 1):(N - M))
+}
+```
+
+```{r}
+lfo_M(fit, 5, 2, data)
+```
+```{r}
+pareto_lfo_M(fit, 5, 2, data)
+```
+```{r}
+lfo <- function(fit, L, data) {
+  df <- data
+  # L is the number of data points left in the beginning for training
+  N <- length(data$co2)
+  loo_cv <- loo(log_lik(fit)[, (L + 1):N])
+  loglik_exact <- matrix(nrow = ndraws(fit), ncol = N)
+for (i in L:(N - 1)) {
+  past <- 1:i
+  oos <- i + 1
+  df_past <- df[past, ]
+  df_oos <- df[c(past, oos),]
+  fit_i <- update(fit, newdata = df_past, recompile = FALSE, refresh=0)
+  loglik_exact[, i + 1] <- log_lik(fit_i, newdata = df_oos, oos = oos)[, oos]
+}
+  
+  exact_elpds <- apply(loglik_exact, 2, log_mean_exp)
+  (exact_elpd <- c(ELPD = sum(exact_elpds, na.rm = TRUE)))
+  
+  rbind_print(
+    "LOO" = loo_cv$estimates["elpd_loo", "Estimate"],
+    "LFO" = exact_elpd
+  )
+}
+```
+
+```{r}
+pareto_lfo <- function(fit, L, data) {
+  M <- 1
+  df <- data
+  plot_ks <- function(ks, ids, thres = 0.6) {
+  dat_ks <- data.frame(ks = ks, ids = ids)
+  ggplot(dat_ks, aes(x = ids, y = ks)) + 
+    geom_point(aes(color = ks > thres), shape = 3, show.legend = FALSE) + 
+    geom_hline(yintercept = thres, linetype = 2, color = "red2") + 
+    scale_color_manual(values = c("cornflowerblue", "darkblue")) + 
+    labs(x = "Data point", y = "Pareto k") + 
+    ylim(-0.5, 1.5)
+}
+  
+  N <- length(data$co2)
+  loo_cv <- loo(log_lik(fit)[, (L + 1):N])
+  k_thres <- 0.7
+  approx_elpds_1sap <- rep(NA, N)
+
+# initialize the process for i = L
+past <- 1:L
+oos <- L + 1
+df_past <- df[past,]
+df_oos <- df[c(past, oos),]
+fit_past <- update(fit, newdata = df_past, recompile = FALSE, refresh=0)
+loglik <- log_lik(fit_past, newdata = df_oos, oos = oos)
+approx_elpds_1sap[L + 1] <- log_mean_exp(loglik[, oos])
+
+# iterate over i > L
+i_refit <- L
+refits <- L
+ks <- NULL
+for (i in (L + 1):(N - 1)) {
+  past <- 1:i
+  oos <- i + 1
+  df_past <- df[past,]
+  df_oos <- df[c(past, oos),]
+  loglik <- log_lik(fit_past, newdata = df_oos, oos = oos)
+  
+  logratio <- sum_log_ratios(loglik, (i_refit + 1):i)
+  psis_obj <- suppressWarnings(psis(logratio))
+  k <- pareto_k_values(psis_obj)
+  ks <- c(ks, k)
+  if (k > k_thres) {
+    # refit the model based on the first i observations
+    i_refit <- i
+    refits <- c(refits, i)
+    fit_past <- update(fit_past, newdata = df_past, recompile = FALSE, refresh=0)
+    loglik <- log_lik(fit_past, newdata = df_oos, oos = oos)
+    approx_elpds_1sap[i + 1] <- log_mean_exp(loglik[, oos])
+  } else {
+    lw <- weights(psis_obj, normalize = TRUE)[, 1]
+    approx_elpds_1sap[i + 1] <- log_sum_exp(lw + loglik[, oos])
+  }
+} 
+    approx_elpd <- sum(approx_elpds_1sap, na.rm = TRUE)
+    cat(
+    "approx LFO ", approx_elpd, "\n"
+    )
+    cat("Using threshold ", k_thres, 
+      ", model was refit ", length(refits), 
+      " times, at observations", refits)
+    plot_ks(ks, (L + 1):(N - M))
+}
+```
+
+```{r}
+lfo(fit, 5, data)
+```
+```{r}
+pareto_lfo(fit, 5, data)
 ```
