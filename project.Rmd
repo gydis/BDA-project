@@ -48,27 +48,51 @@ set.seed(42)
 
 # 1. Introduction
 
-- Motivation
-- Problem definition
-- Modelling idea
+## 1.1. Motivation
 
-Some illustrative figures here.
+In recent years, the urgency of addressing climate change, particularly global warming, has become increasingly apparent. According to the European Union (EU), achieving carbon neutrality by the mid-21st century is essential to limiting global warming to manageable levels.
+
+To tackle this global challenge, there has been a surge in efforts across various domains, including policy, technological innovation, and international cooperation. For instance, the EU has set a goal to reach carbon neutrality by 2050, while Finland aims to achieve this goal as early as 2035, followed by carbon negativity. Such objectives highlight the necessity of bold and immediate measures to transform energy systems and achieve long-term sustainability.
+
+Renewable energy stands out as one of the most effective tools in this endeavor. A clean energy transition, with an increasing share of renewable energy in energy production and a gradual phasing out of fossil fuels, is central to the strategies of many nations and organizations. 
+
+## 1.2. Problem definition
+
+The CO2-equivalent emission coefficient is a measure used to quantify the carbon emissions associated with energy production. It accounts for the total greenhouse gas emissions, expressed in terms of their CO2-equivalent, per unit of energy generated. This coefficient provides a standardized way to assess and compare the carbon intensity of different energy sources, making it an essential metric for tracking progress toward carbon neutrality.
+
+In this report, we focus on studying Finland's carbon emissions by analyzing its CO2-equivalent emission coefficient for electricity generation over the past two decades. Our aim is to understand the current state of carbon emissions in Finland, examine their historical development, and, if possible, gain insights into the future trajectory. Specifically, we want to explore whether Finland is on track to achieve its 2035 carbon neutrality goal.
+
+Given the critical role of clean energy transition in influencing carbon emissions, we intuitively aim to incorporate data on shares of different energy productions as explanatory variables (covariates), especially production shares of renewables and fossil fuels, hoping that external factors might allow us to better explain the CO2-equivalent emission coefficient and understand the dynamics of carbon emissions in Finland's energy sector.
+
+## 1.3. Modelling idea
+
+Our approach to modeling the CO2-equivalent emission coefficient begins with its nature as a time-series dataset, with yearly observations spanning two decades. Therefore, the first modelling idea are about time-series models, which allow us to analyze the data in terms of trends, seasonality, and cyclical patterns. By using a time-series approach, we aim to let the data speak for itself, revealing how the CO2-equivalent emission coefficient has evolved over time and identifying patterns in its variation.
+
+In parellel to the time-series approach, we also assume that the production shares of different energy sources significantly influence the emission coefficient. Intuitively, a high share of fossil fuel production correlates with higher CO2-equivalent emissions due to the carbon-intensive nature of fossil fuels. Conversely, an increased share of renewable energy production, which emits far less CO2, is expected to reduce the emission coefficient. This logic extends to other energy sources, such as nuclear or imported energy. To quantify these relationships, we frame the problem as a linear regression task, treating the CO2-equivalent emission coefficient as the target variables and the production shares of different energy sources as the covariates. The choice of a linear regression model is straightforward, given that production shares are percentages summing to 100% in each observation, and we assume no inherent non-linear relationship between these shares and emissions.
+
+Finally, recognizing that time-series models often benefit from adding predictive exogenous variables, we plan to integrate insights gained from the regression model into the time-series framework. By incorporating production shares as covariates in the time-series model, we aim to improve its performance and better explain the dynamics between energy production and carbon emissions.
 
 # 2. Data Description and Problem Analysis
 
-1. Data description:
-  - Source from Statistics Finland
-  - Describe precisely which table from stats.fi
-  - Briefly describe data gathering and pre-processing:
-    - Download with Python via some API calls
-    - Merge dataframes and drop NaNs
-  - Describe data:
-    - How many years of data?
-    - How many features?
-    - What is the target?
-  - Post-processing: any normalization/standardization?
-2. Problem Analysis:
-  - Not aware of any existing studies/analyses?
+## 2.1. Data description
+
+The dataset used in this study is sourced from Statistics Finland, specifically from table [12vp](https://pxdata.stat.fi/PxWeb/pxweb/en/StatFin/StatFin__ehk/statfin_ehk_pxt_12vp.px/) and table [14qt](https://pxdata.stat.fi/PxWeb/pxweb/en/StatFin/StatFin__ehk/statfin_ehk_pxt_14qt.px/). The data was gathered using Python via API calls, followed by preprocessing steps such as merging dataframes and handling missing values.
+
+The dataset spans 23 years, from 2000 to 2022, and contains the following features:
+
+- $RenewableProductionShare$: The share of renewable energy in total energy production, real value in $[0, 100]$ $(\%)$
+- $FossilFuelsPeatProductionShare$: The share of fossil fuels and peat in total energy production, real value in $[0, 100]$ $(\%)$
+- $NuclearEnergyProductionShare$: The share of nuclear energy in total energy production, real value in $[0, 100]$ $(\%)$
+- $NetImportsProductionShare$: The share of imported energy in total energy production, real value in $[0, 100]$ $(\%)$
+- $OthersProductionShare$: The share of other energy sources (not classified in the above categories) in total energy production, real value in $[0, 100]$ $(\%)$
+
+The target variable is $CO2EquivEmission$, which measures the CO2-equivalent emissions in real, non-negative values.
+
+No additional normalization or standardization was applied, as the covariates are already expressed as percentages and the target variable is directly interpretable.
+
+## 2.2. Problem Analysis
+
+Despite the public availability of this dataset, we are not aware of any existing studies or analyses specifically examining Finland’s CO2-equivalent emission coefficient in relation to energy production shares. While such studies might exist, we do not actively search for them.
   
 # 3. Model description
 
