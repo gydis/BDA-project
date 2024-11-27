@@ -53,48 +53,64 @@ set.seed(seed)
 
 
 ```{r}
-emission <- read_csv("./lin_reg_data.csv", show_col_types = FALSE)
+emission <- read_csv("./data.csv", show_col_types = FALSE)
 head(emission)
 ```
 
 # 3 & 4. Model description & priors: Linear Regression
 
+Using one covariate $RenewableProductionShare$:
+
 $$
-\text{LifeCycleEmission} = \alpha + \beta \cdot \text{RenewableProductionShare}
+\text{CO2EquivEmission} = \alpha + \beta \cdot \text{RenewableProductionShare}
 $$
 
-# 5. brms/Stan code
+Using one covariate $FossilFuelsPeatProductionShare$:
 
-```{r}
-lin_reg_formula <- bf(
-  LifeCycleEmission ~ 1 + RenewableProductionShare,
-  family = "gaussian",
-  center = FALSE
-)
-```
+$$
+\text{CO2EquivEmission} = \alpha + \beta \cdot \text{FossilFuelsPeatProductionShare}
+$$
 
-```{r}
-get_prior(lin_reg_formula, data = emission)
-```
+Using multiple covariates for different kind of energy production:
 
-```{r}
-(lin_reg_priors <- c(
-  prior(normal(0, 300), class = "b", coef = "Intercept"),  # Intercept prior
-  prior(normal(0, 100), class = "b", coef = "RenewableProductionShare"),  # Slope prior
-  prior(normal(0, 100), class = "sigma")  # Residual standard deviation prior
-))
-```
+$$
+\begin{align*}
+\text{CO2EquivEmission} 
+= \alpha 
+&+ \beta_1 \cdot \text{RenewableProductionShare} \\
+&+ \beta_2 \cdot \text{FossilFuelsPeatProductionShare} \\
+&+ \beta_3 \cdot \text{NuclearEnergyProductionShare} \\
+&+ \beta_4 \cdot \text{NetImportsProductionShare} \\
+&+ \beta_5 \cdot \text{OthersProductionShare}
+\end{align*}
 
-# 6. MCMC inference
+$$
+
+
+# 5. brms/Stan code & # 6. MCMC inference
 
 How the MCMC inference was run, i.e., what options were used:
 - command to run MCMC inference
 - a textual explanation of the choice of options
 
+## 5.1. One covariate $RenewableProductionShare$:
+
 ```{r}
-lin_reg_fit <- brm(
-  formula = lin_reg_formula,
-  prior = lin_reg_priors,
+lin_reg_renewable_formula <- bf(
+  CO2EquivEmission ~ 1 + RenewableProductionShare,
+  family = "gaussian",
+  center = FALSE
+)
+
+lin_reg_renewable_priors <- c(
+  prior(normal(0, 1000), class = "b", coef = "Intercept"),
+  prior(normal(0, 50), class = "b", coef = "RenewableProductionShare"),
+  prior(normal(0, 10), class = "sigma")
+)
+
+lin_reg_renewable_fit <- brm(
+  formula = lin_reg_renewable_formula,
+  prior = lin_reg_renewable_priors,
   data = emission,
   iter = 2000,
   warmup = 1000,
@@ -102,6 +118,68 @@ lin_reg_fit <- brm(
   seed = seed
 )
 ```
+
+## 5.2. One covariate $FossilFuelsPeatProductionShare$:
+
+```{r}
+lin_reg_fossil_fuel_formula <- bf(
+  CO2EquivEmission ~ 1 + FossilFuelsPeatProductionShare,
+  family = "gaussian",
+  center = FALSE
+)
+
+lin_reg_fossil_fuel_priors <- c(
+  prior(normal(0, 1000), class = "b", coef = "Intercept"),
+  prior(normal(0, 50), class = "b", coef = "FossilFuelsPeatProductionShare"),
+  prior(normal(0, 10), class = "sigma")
+)
+
+lin_reg_fossil_fuel_fit <- brm(
+  formula = lin_reg_fossil_fuel_formula,
+  prior = lin_reg_fossil_fuel_priors,
+  data = emission,
+  iter = 2000,
+  warmup = 1000,
+  chains = 4,
+  seed = seed
+)
+```
+
+## 5.3. Multiple covariates for different kind of energy production:
+
+```{r}
+lin_reg_multiple_formula <- bf(
+  CO2EquivEmission ~ 1 
+                      + RenewableProductionShare
+                      + FossilFuelsPeatProductionShare
+                      + NuclearEnergyProductionShare
+                      + NetImportsProductionShare
+                      + OthersProductionShare,
+  family = "gaussian",
+  center = FALSE
+)
+
+lin_reg_multiple_priors <- c(
+  prior(normal(0, 1000), class = "b", coef = "Intercept"),  # Broad prior for intercept
+  prior(normal(0, 50), class = "b", coef = "RenewableProductionShare"),
+  prior(normal(0, 50), class = "b", coef = "FossilFuelsPeatProductionShare"),
+  prior(normal(0, 50), class = "b", coef = "NuclearEnergyProductionShare"),
+  prior(normal(0, 50), class = "b", coef = "NetImportsProductionShare"),
+  prior(normal(0, 50), class = "b", coef = "OthersProductionShare"),
+  prior(normal(0, 10), class = "sigma")
+)
+
+lin_reg_multiple_fit <- brm(
+  formula = lin_reg_multiple_formula,
+  prior = lin_reg_multiple_priors,
+  data = emission,
+  iter = 2000,
+  warmup = 1000,
+  chains = 4,
+  seed = seed
+)
+```
+
 
 # 7. Convergence diagnosis
 
@@ -113,8 +191,14 @@ Interpretation of these values:
 If convergence was not good, what did we do to improve?
 
 ```{r}
-summary(lin_reg_fit)
-# TODO: how to plot the trace plots to see if the chains converged?
+# Convergence, R-hat, ESS all good
+summary(lin_reg_renewable_fit)
+
+# I did not test, but I think convergence should be good
+summary(lin_reg_fossil_fuel_fit)
+
+# Some divergence, small ESS, this need to be tuned?
+summary(lin_reg_multiple_fit)
 ```
 
 
@@ -123,39 +207,123 @@ summary(lin_reg_fit)
 What can be interpreted? What was done if the checks indicated misspecifications?
 
 ```{r}
-pp_check(lin_reg_fit)
+pp_check(lin_reg_renewable_fit)
+
+pp_check(lin_reg_fossil_fuel_fit)
+
+pp_check(lin_reg_multiple_fit)
 ```
+
 
 # 9. Predictive performance assessment
 
 Absolute error? Relative error? Quantify performance
 
 ```{r}
-# Extract posterior predictions
-predictions <- posterior_epred(lin_reg_fit)
+pp_check(lin_reg_renewable_fit, type = "ribbon")
 
-# Calculate quantiles
-pred_quantiles <- apply(predictions, 2, quantile, probs = c(0.05, 0.5, 0.95))
+pp_check(lin_reg_fossil_fuel_fit, type = "ribbon")
 
-# Create a data frame for plotting
+pp_check(lin_reg_multiple_fit, type = "ribbon")
+```
+
+## 9.1. Scatter plot for linear models with one covariate
+
+Renewable model:
+
+```{r}
 plot_data <- data.frame(
   RenewableProductionShare = emission$RenewableProductionShare,
-  LifeCycleEmission = emission$LifeCycleEmission,
-  q5 = pred_quantiles[1, ],
-  q50 = pred_quantiles[2, ],
-  q95 = pred_quantiles[3, ]
+  CO2EquivEmission = emission$CO2EquivEmission
+)
+
+# Extract posterior predictions for mu and y
+mu_predictions <- posterior_epred(lin_reg_fit, re_formula = NA)  # Mean predictions
+y_predictions <- posterior_predict(lin_reg_fit)  # Full predictive distribution
+
+# Calculate quantiles for mu
+mu_quantiles <- apply(mu_predictions, 2, quantile, probs = c(0.05, 0.5, 0.95))
+
+# Calculate quantiles for y
+y_quantiles <- apply(y_predictions, 2, quantile, probs = c(0.05, 0.5, 0.95))
+
+# Create data frames for plotting
+mu_plot_data <- data.frame(
+  RenewableProductionShare = emission$RenewableProductionShare,
+  q5 = mu_quantiles[1, ],
+  q50 = mu_quantiles[2, ],
+  q95 = mu_quantiles[3, ]
+)
+
+y_plot_data <- data.frame(
+  RenewableProductionShare = emission$RenewableProductionShare,
+  q5 = y_quantiles[1, ],
+  q50 = y_quantiles[2, ],
+  q95 = y_quantiles[3, ]
 )
 
 # Plot
-ggplot(plot_data, aes(x = RenewableProductionShare, y = LifeCycleEmission)) +
-  geom_point(color = "blue") +
-  geom_line(aes(y = q50), color = "red") +
-  geom_ribbon(aes(ymin = q5, ymax = q95), alpha = 0.2) +
+ggplot() +
+  geom_point(data = plot_data, aes(x = RenewableProductionShare, y = CO2EquivEmission), color = "blue") +
+  # Solid lines for the mean
+  geom_line(data = mu_plot_data, aes(x = RenewableProductionShare, y = q50), color = "grey") +
+  geom_line(data = y_plot_data, aes(x = RenewableProductionShare, y = q50), color = "red") +
+  # Dashed lines for the 95% intervals
+  geom_line(data = mu_plot_data, aes(x = RenewableProductionShare, y = q5), color = "grey", linetype = "dashed") +
+  geom_line(data = mu_plot_data, aes(x = RenewableProductionShare, y = q95), color = "grey", linetype = "dashed") +
+  geom_line(data = y_plot_data, aes(x = RenewableProductionShare, y = q5), color = "red", linetype = "dashed") +
+  geom_line(data = y_plot_data, aes(x = RenewableProductionShare, y = q95), color = "red", linetype = "dashed") +
   labs(y = "Life Cycle Emission", x = "Renewable Production Share") +
   theme_minimal()
 ```
 
+Fossil fuel model:
 
+```{r}
+plot_data <- data.frame(
+  FossilFuelsPeatProductionShare = emission$FossilFuelsPeatProductionShare,
+  CO2EquivEmission = emission$CO2EquivEmission
+)
+
+# Extract posterior predictions for mu and y
+mu_predictions <- posterior_epred(lin_reg_fit, re_formula = NA)  # Mean predictions
+y_predictions <- posterior_predict(lin_reg_fit)  # Full predictive distribution
+
+# Calculate quantiles for mu
+mu_quantiles <- apply(mu_predictions, 2, quantile, probs = c(0.05, 0.5, 0.95))
+
+# Calculate quantiles for y
+y_quantiles <- apply(y_predictions, 2, quantile, probs = c(0.05, 0.5, 0.95))
+
+# Create data frames for plotting
+mu_plot_data <- data.frame(
+  FossilFuelsPeatProductionShare = emission$FossilFuelsPeatProductionShare,
+  q5 = mu_quantiles[1, ],
+  q50 = mu_quantiles[2, ],
+  q95 = mu_quantiles[3, ]
+)
+
+y_plot_data <- data.frame(
+  FossilFuelsPeatProductionShare = emission$FossilFuelsPeatProductionShare,
+  q5 = y_quantiles[1, ],
+  q50 = y_quantiles[2, ],
+  q95 = y_quantiles[3, ]
+)
+
+# Plot
+ggplot() +
+  geom_point(data = plot_data, aes(x = FossilFuelsPeatProductionShare, y = CO2EquivEmission), color = "blue") +
+  # Solid lines for the mean
+  geom_line(data = mu_plot_data, aes(x = FossilFuelsPeatProductionShare, y = q50), color = "grey") +
+  geom_line(data = y_plot_data, aes(x = FossilFuelsPeatProductionShare, y = q50), color = "red") +
+  # Dashed lines for the 95% intervals
+  geom_line(data = mu_plot_data, aes(x = FossilFuelsPeatProductionShare, y = q5), color = "grey", linetype = "dashed") +
+  geom_line(data = mu_plot_data, aes(x = FossilFuelsPeatProductionShare, y = q95), color = "grey", linetype = "dashed") +
+  geom_line(data = y_plot_data, aes(x = FossilFuelsPeatProductionShare, y = q5), color = "red", linetype = "dashed") +
+  geom_line(data = y_plot_data, aes(x = FossilFuelsPeatProductionShare, y = q95), color = "red", linetype = "dashed") +
+  labs(y = "Life Cycle Emission", x = "Fossil Fuels & Peat Production Share") +
+  theme_minimal()
+```
 
 # 10. Sensitivity analysis
 
@@ -165,10 +333,9 @@ Checking whether the result changes a lot if prior is changed
 # 11. Model comparison (e.g. with LOO-CV)
 
 ```{r}
-lin_reg_fit <- add_criterion(
-  lin_reg_fit,
-  criterion = "loo"
+loo_compare(
+  loo(lin_reg_renewable_fit),
+  loo(lin_reg_fossil_fuel_fit),
+  loo(lin_reg_multiple_fit)
 )
-
-loo(lin_reg_fit)
 ```
