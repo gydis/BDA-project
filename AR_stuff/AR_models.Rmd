@@ -1,0 +1,287 @@
+---
+title: "CS-E5710 Bayesian Data Analysis - PROJECT NAME HERE" # TODO: project name here
+author: "Egor Eremin & Tam Nguyen"
+output: 
+  pdf_document:
+    toc: yes
+    toc_depth: 1
+urlcolor: blue
+editor_options: 
+  markdown: 
+    wrap: 72
+---
+
+```{r include=FALSE, results='hide'}
+# Install/import packages
+library(readr)
+
+if (!require(tidybayes)) {
+    install.packages("tidybayes")
+    library(tidybayes)
+}
+
+if (!require(brms)) {
+    install.packages("brms")
+    library(brms)
+}
+
+if(!require(ggplot2)){
+    install.packages("ggplot2")
+    library(ggplot2)
+}
+
+if (!require(loo)) {
+  install.packages("loo")
+  library(loo)
+}
+
+if(!require(cmdstanr)){
+    install.packages("cmdstanr", repos = c("https://mc-stan.org/r-packages/", getOption("repos")))
+    library(cmdstanr)
+}
+cmdstan_installed <- function(){
+  res <- try(out <- cmdstanr::cmdstan_path(), silent = TRUE)
+  !inherits(res, "try-error")
+}
+if(!cmdstan_installed()){
+    install_cmdstan()
+}
+
+```
+
+```{r include=FALSE, results='hide'}
+# General settings (e.g., seed, package options setting)
+seed <- 42
+
+set.seed(seed)
+```
+
+
+```{r}
+emission <- read_csv("../data_processing/data/data.csv", show_col_types = FALSE)
+head(emission)
+```
+
+# 3 & 4. Model description & priors: Autoregressive models
+
+In addition to the linear models, we will also try using models with an AR component to capture possible "inertia" of CO2 emissions caused by changes in the energy infrastructure. 
+
+Using one covariate $RenewableProductionShare$:
+
+$$
+\text{CO2EquivEmission} = \alpha + AR(1)
+$$
+
+$$
+\text{CO2EquivEmission} = \alpha + \beta \cdot \text{RenewableProductionShare} + AR(1)
+$$
+
+Using one covariate $FossilFuelsPeatProductionShare$:
+
+$$
+\text{CO2EquivEmission} = \alpha + \beta \cdot \text{FossilFuelsPeatProductionShare} + AR(1)
+$$
+
+# 5. brms/Stan code & # 6. MCMC inference
+
+How the MCMC inference was run, i.e., what options were used:
+- command to run MCMC inference
+- a textual explanation of the choice of options
+
+## 5.1 AR(1):
+```{r}
+ar_formula <- bf(
+  CO2EquivEmission ~ ar(time = Year, p=1), family="Gaussian"
+)
+get_prior(ar_formula, data=emission)
+ar_priors <- c(
+  prior(normal(0, 1), class = "ar"),
+  prior(normal(0,1000), class="Intercept"),
+  prior(normal(0, 10), class = "sigma")
+)
+
+ar_fit <- brm(
+  formula = ar_formula, 
+  prior = ar_priors, 
+  data=emission, 
+  iter = 2000,
+  warmup = 1000,
+  chains = 4,
+  seed = seed
+  )
+```
+
+## 5.2. One covariate $RenewableProductionShare$ and AR(1):
+
+```{r}
+ar_renewable_formula <- bf(
+  CO2EquivEmission ~ RenewableProductionShare + ar(time = Year, p=1),
+  family = "gaussian",
+  center = FALSE
+)
+
+ar_renewable_priors <- c(
+  prior(normal(0, 1000), class = "b", coef = "Intercept"),
+  prior(normal(0, 50), class = "b", coef = "RenewableProductionShare"),
+  prior(normal(0, 10), class = "sigma"),
+  prior(normal(0, 1), class = "ar")
+  )
+
+ar_renewable_fit <- brm(
+  formula = ar_renewable_formula,
+  prior = ar_renewable_priors,
+  data = emission,
+  iter = 2000,
+  warmup = 1000,
+  chains = 4,
+  seed = seed
+)
+```
+
+## 5.3. One covariate $FossilFuelsPeatProductionShare$ and AR(1): 
+
+```{r}
+ar_fossil_fuel_formula <- bf(
+  CO2EquivEmission ~ FossilFuelsPeatProductionShare + ar(time = Year, p=1),
+  family = "gaussian",
+  center = FALSE
+)
+
+ar_fossil_fuel_priors <- c(
+  prior(normal(0, 1000), class = "b", coef = "Intercept"),
+  prior(normal(0, 50), class = "b", coef = "FossilFuelsPeatProductionShare"),
+  prior(normal(0, 10), class = "sigma"),
+  prior(normal(0, 1), class = "ar")
+)
+
+ar_fossil_fuel_fit <- brm(
+  formula = ar_fossil_fuel_formula,
+  prior = ar_fossil_fuel_priors,
+  data = emission,
+  iter = 2000,
+  warmup = 1000,
+  chains = 4,
+  seed = seed,
+  control=list(adapt_delta = 0.99)
+)
+```
+
+
+# 7. Convergence diagnosis
+
+Interpretation of these values:
+- R-hat convergence diagnostics
+- HMC specific convergence diagnostics (divergences, tree depth)
+- ESS diagnostics
+
+If convergence was not good, what did we do to improve?
+
+```{r}
+summary(ar_fit)
+
+summary(ar_renewable_fit)
+
+summary(ar_fossil_fuel_fit)
+```
+
+
+# 8. Posterior predictive checks
+
+What can be interpreted? What was done if the checks indicated misspecifications?
+
+```{r}
+pp_check(ar_fit)
+
+pp_check(ar_renewable_fit)
+
+pp_check(ar_fossil_fuel_fit)
+```
+
+
+# 9. Predictive performance assessment
+
+Absolute error? Relative error? Quantify performance
+
+```{r}
+pp_check(ar_fit, type = "ribbon")
+
+pp_check(ar_renewable_fit, type = "ribbon")
+
+pp_check(ar_fossil_fuel_fit, type = "ribbon")
+```
+
+# 10. Sensitivity analysis
+
+
+
+# 11. Model comparison (e.g. with LOO-CV)
+```{r}
+pareto_lfo <- function(fit, L, data) {
+  M <- 1
+  df <- data
+  plot_ks <- function(ks, ids, thres = 0.6) {
+  dat_ks <- data.frame(ks = ks, ids = ids)
+  ggplot(dat_ks, aes(x = ids, y = ks)) + 
+    geom_point(aes(color = ks > thres), shape = 3, show.legend = FALSE) + 
+    geom_hline(yintercept = thres, linetype = 2, color = "red2") + 
+    scale_color_manual(values = c("cornflowerblue", "darkblue")) + 
+    labs(x = "Data point", y = "Pareto k") + 
+    ylim(-0.5, 1.5)
+}
+  
+  N <- length(data$CO2EquivEmission)
+  loo_cv <- loo(log_lik(fit)[, (L + 1):N])
+  k_thres <- 0.7
+  approx_elpds_1sap <- rep(NA, N)
+
+# initialize the process for i = L
+past <- 1:L
+oos <- L + 1
+df_past <- df[past,]
+df_oos <- df[c(past, oos),]
+fit_past <- update(fit, newdata = df_past, recompile = FALSE, refresh=0)
+loglik <- log_lik(fit_past, newdata = df_oos, oos = oos)
+approx_elpds_1sap[L + 1] <- log_mean_exp(loglik[, oos])
+
+# iterate over i > L
+i_refit <- L
+refits <- L
+ks <- NULL
+for (i in (L + 1):(N - 1)) {
+  past <- 1:i
+  oos <- i + 1
+  df_past <- df[past,]
+  df_oos <- df[c(past, oos),]
+  loglik <- log_lik(fit_past, newdata = df_oos, oos = oos)
+  
+  logratio <- sum_log_ratios(loglik, (i_refit + 1):i)
+  psis_obj <- suppressWarnings(psis(logratio))
+  k <- pareto_k_values(psis_obj)
+  ks <- c(ks, k)
+  if (k > k_thres) {
+    # refit the model based on the first i observations
+    i_refit <- i
+    refits <- c(refits, i)
+    fit_past <- update(fit_past, newdata = df_past, recompile = FALSE, refresh=0)
+    loglik <- log_lik(fit_past, newdata = df_oos, oos = oos)
+    approx_elpds_1sap[i + 1] <- log_mean_exp(loglik[, oos])
+  } else {
+    lw <- weights(psis_obj, normalize = TRUE)[, 1]
+    approx_elpds_1sap[i + 1] <- log_sum_exp(lw + loglik[, oos])
+  }
+} 
+    approx_elpd <- sum(approx_elpds_1sap, na.rm = TRUE)
+    cat(
+    "approx LFO ", approx_elpd, "\n"
+    )
+    cat("Using threshold ", k_thres, 
+      ", model was refit ", length(refits), 
+      " times, at observations", refits)
+    plot_ks(ks, (L + 1):(N - M))
+}
+```
+```{r}
+pareto_lfo(ar_fit, 5, emission)
+pareto_lfo(ar_renewable_fit, 5, emission)
+pareto_lfo(ar_fossil_fuel_fit, 5, emission)
+```
