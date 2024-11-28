@@ -35,6 +35,11 @@ if (!require(loo)) {
   library(loo)
 }
 
+if (!require(priorsense)) {
+  install.packages("priorsense")
+  library(priorsense)
+}
+
 if(!require(cmdstanr)){
     install.packages("cmdstanr", repos = c("https://mc-stan.org/r-packages/", getOption("repos")))
     library(cmdstanr)
@@ -212,7 +217,17 @@ pp_check(ar_fossil_fuel_fit, type = "ribbon")
 
 # 10. Sensitivity analysis
 
+```{r}
+powerscale_sensitivity(ar_fit)
+powerscale_sensitivity(ar_renewable_fit)
+powerscale_sensitivity(ar_fossil_fuel_fit)
+```
 
+```{r}
+powerscale_plot_dens(ar_fit)
+powerscale_plot_dens(ar_renewable_fit)
+powerscale_plot_dens(ar_fossil_fuel_fit)
+```
 
 # 11. Model comparison (e.g. with LOO-CV)
 ```{r}
