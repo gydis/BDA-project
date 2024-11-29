@@ -20,6 +20,13 @@ if (!require(tidybayes)) {
     library(tidybayes)
 }
 
+library(rlang)
+
+if (!require(purrr)) {
+    install.packages("purrr")
+    library(purrr)
+}
+
 if (!require(brms)) {
     install.packages("brms")
     library(brms)
@@ -30,6 +37,11 @@ if(!require(ggplot2)){
     library(ggplot2)
 }
 
+if(!require(ggpubr)){
+    install.packages("ggpubr")
+    library(ggpubr)
+}
+
 if (!require(loo)) {
   install.packages("loo")
   library(loo)
@@ -38,6 +50,11 @@ if (!require(loo)) {
 if (!require(priorsense)) {
   install.packages("priorsense")
   library(priorsense)
+}
+
+if (!require(reshape2)) {
+  install.packages("reshape2")
+  library(reshape2)
 }
 
 if(!require(cmdstanr)){
@@ -228,9 +245,75 @@ powerscale_plot_dens(ar_fit)
 powerscale_plot_dens(ar_renewable_fit)
 powerscale_plot_dens(ar_fossil_fuel_fit)
 ```
+```{r}
+priors <- list(
+  ar1_i1000_sigma10=c(
+    prior(normal(0, 1), class = "ar"),
+    prior(normal(0,1000), class="Intercept"),
+    prior(normal(0, 10), class = "sigma")
+  ),
+  ar1_i500_sigma100=c(
+    prior(normal(0, 1), class = "ar"),
+    prior(normal(0,500), class="Intercept"),
+    prior(normal(0, 100), class = "sigma")
+  )
+)
+
+draws <- priors %>%
+  map(~ as.matrix(update(ar_fit, prior=.x, seed=seed)))
+```
+```{r}
+draws_to_plot <- function(draws) {
+  params <- head(colnames(draws[[1]]), -2)
+  data <- list()
+  for (p in params) {
+      for (name in names(draws)) {
+        t <- draws[[name]][,p]
+        for (s in 1:length(t)) {
+          data[[p]][[name]][[s]] = t[[s]]
+        }
+      }
+  }
+  data
+}
+dt <- draws_to_plot(draws)
+
+plot_for_loop <- function(df, x_var) {
+  df.long <- melt(df)
+    ggplot(df.long, aes(x= value, fill=L1)) +
+    geom_density(alpha=0.7) +
+    labs(x = x_var) +
+    theme_classic(base_size = 12)
+}
+
+plot_list <- list()
+for (p in params) {
+  plot_list[[length(plot_list)+1]] <- plot_for_loop(dt[[p]], p)
+}
+
+# Combine all plots
+ggarrange(plotlist=plot_list, common.legend=TRUE)
+```
 
 # 11. Model comparison (e.g. with LOO-CV)
 ```{r}
+log_sum_exp <- function(x) {
+  max_x <- max(x)  
+  max_x + log(sum(exp(x - max_x)))
+}
+
+# more stable than log(mean(exp(x)))
+log_mean_exp <- function(x) {
+  log_sum_exp(x) - log(length(x))
+}
+
+# compute log of raw importance ratios
+# sums over observations *not* over posterior samples
+sum_log_ratios <- function(loglik, ids = NULL) {
+  if (!is.null(ids)) loglik <- loglik[, ids, drop = FALSE]
+  rowSums(loglik)
+}
+
 pareto_lfo <- function(fit, L, data) {
   M <- 1
   df <- data
