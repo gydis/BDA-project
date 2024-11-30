@@ -1,0 +1,444 @@
+---
+title: "CS-E5710 Bayesian Data Analysis - PROJECT NAME HERE" # TODO: project name here
+author: "Egor Eremin & Tam Nguyen"
+output: 
+  pdf_document:
+    toc: yes
+    toc_depth: 1
+urlcolor: blue
+editor_options: 
+  markdown: 
+    wrap: 72
+---
+
+```{r include=FALSE, results='hide'}
+# Install/import packages
+if (!require(tidybayes)) {
+    install.packages("tidybayes")
+    library(tidybayes)
+}
+
+if (!require(brms)) {
+    install.packages("brms")
+    library(brms)
+}
+
+if(!require(ggplot2)){
+    install.packages("ggplot2")
+    library(ggplot2)
+}
+
+if(!require(cmdstanr)){
+    install.packages("cmdstanr", repos = c("https://mc-stan.org/r-packages/", getOption("repos")))
+    library(cmdstanr)
+}
+cmdstan_installed <- function(){
+  res <- try(out <- cmdstanr::cmdstan_path(), silent = TRUE)
+  !inherits(res, "try-error")
+}
+if(!cmdstan_installed()){
+    install_cmdstan()
+}
+```
+
+```{r include=FALSE, results='hide'}
+# General settings (e.g., seed, package options setting)
+seed <- 42
+
+set.seed(seed)
+```
+
+# 1. Introduction
+
+## 1.1. Motivation
+
+In recent years, the urgency of addressing climate change, particularly global warming, has become increasingly apparent. According to the European Union (EU), achieving carbon neutrality by the mid-21st century is essential to limiting global warming to manageable levels.
+
+To tackle this global challenge, there has been a surge in efforts across various domains, including policy, technological innovation, and international cooperation. For instance, the EU has set a goal to reach carbon neutrality by 2050, while Finland aims to achieve this goal as early as 2035, followed by carbon negativity. Such objectives highlight the necessity of bold and immediate measures to transform energy systems and achieve long-term sustainability.
+
+Renewable energy stands out as one of the most effective tools in this endeavor. A clean energy transition, with an increasing share of renewable energy in energy production and a gradual phasing out of fossil fuels, is central to the strategies of many nations and organizations. 
+
+## 1.2. Problem definition
+
+The CO2-equivalent emission coefficient is a measure used to quantify the carbon emissions associated with energy production. It accounts for the total greenhouse gas emissions, expressed in terms of their CO2-equivalent, per unit of energy generated. This coefficient provides a standardized way to assess and compare the carbon intensity of different energy sources, making it an essential metric for tracking progress toward carbon neutrality.
+
+In this report, we focus on studying Finland's carbon emissions by analyzing its CO2-equivalent emission coefficient for electricity generation over the past two decades. Our aim is to understand the current state of carbon emissions in Finland, examine their historical development, and, if possible, gain insights into the future trajectory. Specifically, we want to explore whether Finland is on track to achieve its 2035 carbon neutrality goal.
+
+Given the critical role of clean energy transition in influencing carbon emissions, we intuitively aim to incorporate data on shares of different energy productions as explanatory variables (covariates), especially production shares of renewables and fossil fuels, hoping that external factors might allow us to better explain the CO2-equivalent emission coefficient and understand the dynamics of carbon emissions in Finland's energy sector.
+
+## 1.3. Modelling idea {#modelling-idea}
+
+Our approach to modeling the CO2-equivalent emission coefficient begins with its nature as a time-series dataset, with yearly observations spanning two decades. Therefore, the first modelling idea are about time-series models, which allow us to analyze the data in terms of trends, seasonality, and cyclical patterns. By using a time-series approach, we aim to let the data speak for itself, revealing how the CO2-equivalent emission coefficient has evolved over time and identifying patterns in its variation.
+
+In parellel to the time-series approach, we also assume that the production shares of different energy sources significantly influence the emission coefficient. Intuitively, a high share of fossil fuel production correlates with higher CO2-equivalent emissions due to the carbon-intensive nature of fossil fuels. Conversely, an increased share of renewable energy production, which emits far less CO2, is expected to reduce the emission coefficient. This logic extends to other energy sources, such as nuclear or imported energy. To quantify these relationships, we frame the problem as a linear regression task, treating the CO2-equivalent emission coefficient as the target variables and the production shares of different energy sources as the covariates. The choice of a linear regression model is straightforward, given that production shares are percentages summing to 100% in each observation, and we assume no inherent non-linear relationship between these shares and emissions.
+
+Finally, recognizing that time-series models often benefit from adding predictive exogenous variables, we plan to integrate insights gained from the regression model into the time-series framework. By incorporating production shares as covariates in the time-series model, we aim to improve its performance and better explain the dynamics between energy production and carbon emissions.
+
+# 2. Data Description and Problem Analysis
+
+## 2.1. Data description
+
+The dataset used in this study is sourced from Statistics Finland, specifically from table [12vp](https://pxdata.stat.fi/PxWeb/pxweb/en/StatFin/StatFin__ehk/statfin_ehk_pxt_12vp.px/) and table [14qt](https://pxdata.stat.fi/PxWeb/pxweb/en/StatFin/StatFin__ehk/statfin_ehk_pxt_14qt.px/). The data was gathered using Python via API calls, followed by preprocessing steps such as merging dataframes and handling missing values.
+
+The dataset spans 23 years, from 2000 to 2022, and contains the following features:
+
+- $RenewableProductionShare$: The share of renewable energy in total energy production, real value in $[0, 100]$ $(\%)$
+- $FossilFuelsPeatProductionShare$: The share of fossil fuels and peat in total energy production, real value in $[0, 100]$ $(\%)$
+- $NuclearEnergyProductionShare$: The share of nuclear energy in total energy production, real value in $[0, 100]$ $(\%)$
+- $NetImportsProductionShare$: The share of imported energy in total energy production, real value in $[0, 100]$ $(\%)$
+- $OthersProductionShare$: The share of other energy sources (not classified in the above categories) in total energy production, real value in $[0, 100]$ $(\%)$
+
+The target variable is $CO2EquivEmission$, which measures the CO2-equivalent emissions in real, non-negative values.
+
+No additional normalization or standardization was applied, as the covariates are already expressed as percentages and the target variable is directly interpretable.
+
+## 2.2. Problem Analysis
+
+Despite the public availability of this dataset, we are not aware of any existing studies or analyses specifically examining Finland’s CO2-equivalent emission coefficient in relation to energy production shares. While such studies might exist, we do not actively search for them.
+  
+# 3. Model Description
+
+In this section, we provide detailed descriptions of the models mentioned in [Section 1.3](#modelling-idea) as follows:
+
+- [Section 3.1](#ts-def) describes the time-series approach, specifically the autoregressive (AR) model.
+- [Section 3.2](#linreg-def) explains the linear regression model, where production shares of energy sources are used as covariates to estimate their impact on the emission coefficient.
+- [Section 3.3](#hybrid-def) builds on the insights from the linear regression model in [Section 3.2](#linreg-def) to better understand the dynamics between the emission coefficient and production shares. These covariates are then included as exogenous variables in the AR model from [Section 3.1](#ts-def) to improve the performance.
+
+## 3.1. Time series models {#ts-def}
+
+## 3.2. Linear Regression {#linreg-def}
+
+
+The linear regression model for CO2-equivalent emissions is defined as follows:
+
+$$
+y = \alpha + \sum_{i=1}^k \beta_i \cdot x_i + \varepsilon,
+$$
+
+where:
+
+- $y$ is the target variable $CO2EquivEmission$,
+- $\alpha \in \mathbb{R}$ is the unknown scalar intercept,
+- $\beta_i \in \mathbb{R}$ are the unknown scalar slopes for each production share,
+- $\x_i$ represents the production share of energy source $i$ (e.g., renewable, fossil fuels, nuclear), 
+- $\varepsilon \sim \mathcal{N}(0, \sigma^2)$  the noise, and
+- $k$ is the total number of energy sources included in the model.
+
+Accordingly, the Bayesian formulation for $CO2EquivEmission$ is
+
+$$
+p(y|x_1, ..., x_k,\alpha,\beta_1, ..., \beta_k,\sigma) = p_\mathrm{normal}(y|\alpha + \sum_{i=1}^k \beta_i \cdot x_i, \sigma).
+$$
+
+The statistical model further implies
+
+$$
+p(y^{\mathrm{pred}}|x_1^{\mathrm{pred}}, ..., x_k^{\mathrm{pred}},\alpha,\beta_1, ..., \beta_k,\sigma) = p_\mathrm{normal}(y|\alpha + \sum_{i=1}^k \beta_i \cdot x_i^{\mathrm{pred}}, \sigma).
+$$
+
+as the predictive distribution for a new observation $y^{\mathrm{pred}}$ at a 
+given new covariate values $x^{\mathrm{pred}}_1, ..., x^{\mathrm{pred}}_k$.
+
+
+We will use the following three linear models as explained in [Section 1.3](#modelling-idea):
+
+1. Single Covariate: $RenewableProductionShare$
+
+$$
+\text{CO2EquivEmission} = \alpha + \beta \cdot \text{RenewableProductionShare}
+$$
+
+
+2. Single Covariate: $FossilFuelsPeatProductionShare$
+
+$$
+\text{CO2EquivEmission} = \alpha + \beta \cdot \text{FossilFuelsPeatProductionShare}
+$$
+
+3. Multiple Covariates: Full linear model with all types of energy production
+
+$$
+\begin{align*}
+\text{CO2EquivEmission} 
+= \alpha 
+&+ \beta_1 \cdot \text{RenewableProductionShare} \\
+&+ \beta_2 \cdot \text{FossilFuelsPeatProductionShare} \\
+&+ \beta_3 \cdot \text{NuclearEnergyProductionShare} \\
+&+ \beta_4 \cdot \text{NetImportsProductionShare} \\
+&+ \beta_5 \cdot \text{OthersProductionShare}
+\end{align*}
+
+$$
+
+
+## 3.3 Combination of time-series and covariates {#hybrid-def}
+
+
+
+# 4. Prior justification
+
+## 4.1. Time series models {#ts-prior}
+
+## 4.2. Linear Regression {#linreg-prior}
+
+The prior for the regression coefficients $\beta_i$ is specified as:
+
+$$
+\beta_1, \beta_2, \dots, \beta_k \sim \mathcal{N}(0, 10).
+$$
+
+This reflects a weakly informative prior with a standard deviation of 10, allowing 
+for a wide range of plausible values for $\beta_i$. By using large variance, 
+the prior expresses minimal prior knowledge, given that we do not have much
+information about plausible values for $\beta_i$, and we would like the data
+to speak for itself.
+
+
+The prior for the intercept $\alpha$ is specified as:
+
+$$
+\alpha \sim \mathcal{N}(0, 500).
+$$
+
+Since $y$ has a large range, we assign a prior with a large standard deviation 
+to reflect the broader uncertainty about the baseline value of $y$ when all 
+covariates are zero. The large variance ensures that the prior is weakly informative 
+and does not overly constrain the model.
+
+
+The prior for $\sigma$ is given by:
+
+$$
+\sigma \sim \mathcal{N}^+(0, 10),
+$$
+
+where $\mathcal{N}^+$ indicates the positive half-normal distribution. This ensures 
+that $\sigma$ is strictly positive and reflects weak prior knowledge about the 
+variability in the observations.
+
+
+## 4.3 Time series with exogeneous {#hybrid-prior}
+
+# 5. brms/rstanarm/Stan code
+
+We use `brms` to fit our models. In addition to the `brms` formulas, we also
+define the priors for each model according to our prior justifications above.
+
+## 5.1. Time series models {#ts-code}
+
+## 5.2. Linear Regression {#linreg-code}
+
+### 5.2.1. Single covariate $RenewableProductionShare$:
+
+```{r}
+lin_reg_renewable_formula <- bf(
+  CO2EquivEmission ~ 1 + RenewableProductionShare,
+  family = "gaussian",
+  center = FALSE
+)
+
+lin_reg_renewable_priors <- c(
+  prior(normal(0, 500), class = "b", coef = "Intercept"),
+  prior(normal(0, 10), class = "b", coef = "RenewableProductionShare"),
+  prior(normal(0, 10), class = "sigma")
+)
+```
+
+## 5.2.2. One covariate $FossilFuelsPeatProductionShare$:
+
+```{r}
+lin_reg_fossil_fuel_formula <- bf(
+  CO2EquivEmission ~ 1 + FossilFuelsPeatProductionShare,
+  family = "gaussian",
+  center = FALSE
+)
+
+lin_reg_fossil_fuel_priors <- c(
+  prior(normal(0, 500), class = "b", coef = "Intercept"),
+  prior(normal(0, 10), class = "b", coef = "FossilFuelsPeatProductionShare"),
+  prior(normal(0, 10), class = "sigma")
+)
+```
+
+## 5.3. Multiple covariates for different kind of energy production:
+
+```{r}
+lin_reg_multiple_formula <- bf(
+  CO2EquivEmission ~ 1 
+                      + RenewableProductionShare
+                      + FossilFuelsPeatProductionShare
+                      + NuclearEnergyProductionShare
+                      + NetImportsProductionShare
+                      + OthersProductionShare,
+  family = "gaussian",
+  center = FALSE
+)
+
+lin_reg_multiple_priors <- c(
+  prior(normal(0, 500), class = "b", coef = "Intercept"),  # Broad prior for intercept
+  prior(normal(0, 10), class = "b", coef = "RenewableProductionShare"),
+  prior(normal(0, 10), class = "b", coef = "FossilFuelsPeatProductionShare"),
+  prior(normal(0, 10), class = "b", coef = "NuclearEnergyProductionShare"),
+  prior(normal(0, 10), class = "b", coef = "NetImportsProductionShare"),
+  prior(normal(0, 10), class = "b", coef = "OthersProductionShare"),
+  prior(normal(0, 10), class = "sigma")
+)
+```
+
+## 5.3 Time series with exogeneous {#hybrid-code}
+
+
+# 6. MCMC inference
+
+How the MCMC inference was run, i.e., what options were used:
+- command to run MCMC inference
+- a textual explanation of the choice of options
+
+For all models
+
+## 6.1. Time series models {#ts-inference}
+
+## 6.2. Linear Regression {#linreg-inference}
+
+The models are run with 4 chains, 2000 iterations, and 1000 warm-ups.
+
+```{r}
+lin_reg_renewable_fit <- brm(
+  formula = lin_reg_renewable_formula,
+  prior = lin_reg_renewable_priors,
+  data = emission,
+  iter = 2000,
+  warmup = 1000,
+  chains = 4,
+  seed = seed
+)
+
+lin_reg_fossil_fuel_fit <- brm(
+  formula = lin_reg_fossil_fuel_formula,
+  prior = lin_reg_fossil_fuel_priors,
+  data = emission,
+  iter = 2000,
+  warmup = 1000,
+  chains = 4,
+  seed = seed
+)
+
+lin_reg_multiple_fit <- brm(
+  formula = lin_reg_multiple_formula,
+  prior = lin_reg_multiple_priors,
+  data = emission,
+  iter = 2000,
+  warmup = 1000,
+  chains = 4,
+  seed = seed
+)
+```
+
+## 6.3 Time series with exogeneous {#hybrid-inference}
+
+
+# 7. Convergence diagnosis
+
+- R-hat convergence diagnostics
+- HMC specific convergence diagnostics (divergences, tree depth)
+- ESS diagnostics
+
+Interpretation of these values.
+
+If convergence was not good, what did we do to improve?
+
+For all models
+
+## 7.1. Time series models {#ts-convergence}
+
+## 7.2. Linear Regression {#linreg-convergence}
+
+
+
+```{r}
+# Convergence, R-hat, ESS all good
+summary(lin_reg_renewable_fit)
+
+# I did not test, but I think convergence should be good
+summary(lin_reg_fossil_fuel_fit)
+
+# Some divergence, small ESS, this need to be tuned?
+summary(lin_reg_multiple_fit)
+```
+
+## 7.3 Time series with exogeneous {#hybrid-convergence}
+
+# 8. Posterior predictive checks
+
+What can be interpreted? What was done if the checks indicated misspecifications?
+
+For all models
+
+pp_check(fit)
+- include for linear regression models
+- temporarily include for time-series models. TODO: confirm with TA about intuition
+
+TODO
+1x3 plots of pp_check for linear regresion models
+Description and inference from the plots
+
+
+TODO
+1x3 plots of pp_check for time series models
+Description and inference from the plots
+
+
+# 9. Predictive performance assessment
+
+Absolute error? Relative error? Quantify performance
+
+For all models
+
+pp_check(fit, type = "ribbon")
+
+TODO
+1x3 plots of pp_check(fit, type = "ribbon") for linear regresion models
+Description and inference from the plots
+
+
+TODO
+1x3 plots of pp_check(fit, type = "ribbon") for time series models
+Description and inference from the plots
+
+# 10. Sensitivity analysis
+
+Checking whether the result changes a lot if prior is changed
+
+For all models
+
+Fit with different priors, plot the posterior distributions (Exercise 2.)
+
+## 10.1. Time series models {#ts-sensitivity}
+
+TODO: sensitivity plot for time series model
+
+## 10.2. Linear Regression {#linreg-sensitivity}
+
+TODO: sensitivity plot for linear regression model
+
+## 10.3 Time series with exogeneous {#hybrid-sensitivity}
+
+TODO: sensitivity plot for ts + linear models
+
+# 11. Model comparison (e.g. with LOO-CV)
+
+ TODO: LFO code and ELPD for all models
+
+# 12. Discussion of issues and potential improvements
+
+# 13. Conclusion what was learned from the data analysis
+
+# 14. Self-reflection of what the group learned while making the project
+
+
+
+
+
+
+
+
