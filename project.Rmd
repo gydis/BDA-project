@@ -94,7 +94,7 @@ set.seed(seed)
 ```
 
 ```{r include=FALSE, results='hide'}
-emission <- read_csv("./data_processing/data/data.csv", show_col_types = FALSE)
+emission <- read_csv("data.csv", show_col_types = FALSE)
 ```
 
 # 1. Introduction
@@ -194,27 +194,27 @@ We will use the following three linear models as explained in [Section 1.3](#mod
 1. Single Covariate: $RenewableProductionShare$
 
 $$
-\text{CO2EquivEmission} = \alpha + \beta \cdot \text{RenewableProductionShare}
+CO2EquivEmission = \alpha + \beta \cdot RenewableProductionShare
 $$
 
 
 2. Single Covariate: $FossilFuelsPeatProductionShare$
 
 $$
-\text{CO2EquivEmission} = \alpha + \beta \cdot \text{FossilFuelsPeatProductionShare}
+CO2EquivEmission = \alpha + \beta \cdot FossilFuelsPeatProductionShare
 $$
 
 3. Multiple Covariates: Full linear model with all types of energy production
 
 $$
 \begin{aligned}
-\text{CO2EquivEmission} 
+CO2EquivEmission
 = \alpha 
-&+ \beta_1 \cdot \text{RenewableProductionShare} \\
-&+ \beta_2 \cdot \text{FossilFuelsPeatProductionShare} \\
-&+ \beta_3 \cdot \text{NuclearEnergyProductionShare} \\
-&+ \beta_4 \cdot \text{NetImportsProductionShare} \\
-&+ \beta_5 \cdot \text{OthersProductionShare}
+&+ \beta_1 \cdot RenewableProductionShare \\
+&+ \beta_2 \cdot FossilFuelsPeatProductionShare \\
+&+ \beta_3 \cdot NuclearEnergyProductionShare \\
+&+ \beta_4 \cdot NetImportsProductionShare \\
+&+ \beta_5 \cdot OthersProductionShare
 \end{aligned}
 $$
 
@@ -293,7 +293,7 @@ lin_reg_renewable_priors <- c(
 )
 ```
 
-## 5.2.2. One covariate $FossilFuelsPeatProductionShare$:
+### 5.2.2. One covariate $FossilFuelsPeatProductionShare$:
 
 ```{r results='hide'}
 lin_reg_fossil_fuel_formula <- bf(
@@ -309,7 +309,7 @@ lin_reg_fossil_fuel_priors <- c(
 )
 ```
 
-## 5.3. Multiple covariates for different kind of energy production:
+### 5.2.3. Multiple covariates for different kind of energy production:
 
 ```{r results='hide'}
 lin_reg_multiple_formula <- bf(
@@ -346,35 +346,35 @@ The models are run with 4 chains, 2000 iterations, and 1000 warm-ups.
 ## 6.2. Linear Regression {#linreg-inference}
 
 ```{r results='hide'}
-# lin_reg_renewable_fit <- brm(
-#   formula = lin_reg_renewable_formula,
-#   prior = lin_reg_renewable_priors,
-#   data = emission,
-#   iter = 2000,
-#   warmup = 1000,
-#   chains = 4,
-#   seed = seed
-# )
-# 
-# lin_reg_fossil_fuel_fit <- brm(
-#   formula = lin_reg_fossil_fuel_formula,
-#   prior = lin_reg_fossil_fuel_priors,
-#   data = emission,
-#   iter = 2000,
-#   warmup = 1000,
-#   chains = 4,
-#   seed = seed
-# )
+lin_reg_renewable_fit <- brm(
+  formula = lin_reg_renewable_formula,
+  prior = lin_reg_renewable_priors,
+  data = emission,
+  iter = 2000,
+  warmup = 1000,
+  chains = 4,
+  seed = seed
+)
 
-#lin_reg_multiple_fit <- brm(
-#  formula = lin_reg_multiple_formula,
-#  prior = lin_reg_multiple_priors,
-#  data = emission,
-#  iter = 2000,
-#  warmup = 1000,
-#  chains = 4,
-#  seed = seed
-#)
+lin_reg_fossil_fuel_fit <- brm(
+  formula = lin_reg_fossil_fuel_formula,
+  prior = lin_reg_fossil_fuel_priors,
+  data = emission,
+  iter = 2000,
+  warmup = 1000,
+  chains = 4,
+  seed = seed
+)
+
+lin_reg_multiple_fit <- brm(
+  formula = lin_reg_multiple_formula,
+  prior = lin_reg_multiple_priors,
+  data = emission,
+  iter = 2000,
+  warmup = 1000,
+  chains = 4,
+  seed = seed
+)
 ```
 
 ## 6.3 Time series with exogeneous {#hybrid-inference}
@@ -384,13 +384,13 @@ The models are run with 4 chains, 2000 iterations, and 1000 warm-ups.
 
 According to the MCMC inference summary below, there is no sign of divergence in most of the models, as we had no divergent transitions, and the $\hat{R}$ values for all of our models are 1. Even though the effective samples sizes differ from the number of samples significantly, they remain sufficiently large, indicating that we still have a good amount of independent samples to use for analysis.
 
-```{r include=FALSE}
+```{r echo=FALSE}
 # summary(ar_fit)
 # summary(ar_renewable_fit)
 # summary(ar_fossil_fuel_fit)
-# summary(lin_reg_renewable_fit)
-# summary(lin_reg_fossil_fuel_fit)
-#summary(lin_reg_multiple_fit) # Divergence problem
+summary(lin_reg_renewable_fit)
+summary(lin_reg_fossil_fuel_fit)
+summary(lin_reg_multiple_fit) # Divergence problem
 ```
 
 Multiple Covariate Linear Regression Model
@@ -401,7 +401,7 @@ Using the `pairs()` plot, we diagnosed that the divergence was caused by high
 multicollinearity in the predictors. Specifically, $RenewableProductionShare$ and $FossilFuelsPeatProductionShare$ were found to be highly negatively correlated. 
 To resolve this, we removed $RenewableProductionShare$ from the list of covariates.
 
-```{r, include=FALSE}
+```{r, echo=FALSE}
 # Create a pairs plot for the problematic covariates
 pairs(emission[, c("RenewableProductionShare", "FossilFuelsPeatProductionShare")])
 ```
@@ -410,12 +410,12 @@ As a result, we use a linear regression with these covariates:
 
 $$
 \begin{aligned}
-\text{CO2EquivEmission} 
+CO2EquivEmission
 = \alpha 
-&+ \beta_1 \cdot \text{FossilFuelsPeatProductionShare} \\
-&+ \beta_2 \cdot \text{NuclearEnergyProductionShare} \\
-&+ \beta_3 \cdot \text{NetImportsProductionShare} \\
-&+ \beta_4 \cdot \text{OthersProductionShare}
+&+ \beta_1 \cdot FossilFuelsPeatProductionShare \\
+&+ \beta_2 \cdot NuclearEnergyProductionShare \\
+&+ \beta_3 \cdot NetImportsProductionShare \\
+&+ \beta_4 \cdot OthersProductionShare
 \end{aligned}
 $$
 
@@ -426,7 +426,7 @@ variances to be more informative, yet still weakly informative.
 Correspondingly, the updated `brms` model is:
 
 ```{r results='hide'}
-lin_reg_multiple_formula <- bf(
+lin_reg_multiple_fix_formula <- bf(
   CO2EquivEmission ~ 1 
                       + FossilFuelsPeatProductionShare
                       + NuclearEnergyProductionShare
@@ -436,7 +436,7 @@ lin_reg_multiple_formula <- bf(
   center = FALSE
 )
 
-lin_reg_multiple_priors <- c(
+lin_reg_multiple_fix_priors <- c(
   prior(normal(0, 250), class = "b", coef = "Intercept"),  # Broad prior for intercept
   prior(normal(0, 5), class = "b", coef = "FossilFuelsPeatProductionShare"),
   prior(normal(0, 5), class = "b", coef = "NuclearEnergyProductionShare"),
@@ -446,8 +446,8 @@ lin_reg_multiple_priors <- c(
 )
 ```
 
-```{r, include=FALSE, results='hide'}
-lin_reg_multiple_fit <- brm(
+```{r, echo=FALSE, results='hide'}
+lin_reg_multiple_fix_fit <- brm(
   formula = lin_reg_multiple_formula,
   prior = lin_reg_multiple_priors,
   data = emission,
@@ -462,45 +462,130 @@ After removing problematic covariate $RenewableProductionShare$ and updating
 the priors, we can see that the linear regression model with multiple covariates
 does not have divergence problem anymore.
 
-```{r, include=FALSE}
-summary(lin_reg_multiple_fit)
+```{r, echo=FALSE}
+summary(lin_reg_multiple_fix_fit)
 ```
 
-# 8. Posterior predictive checks
+# 8. Posterior Predictive Checks
 
-What can be interpreted? What was done if the checks indicated misspecifications?
+Despite the MCMC inference converging, the density overlay revealed several 
+interesting insights during the posterior predictive checks.
 
-For all models
+First, we observe that the linear model with renewable production share does not 
+fit the data well. The density of $y_\text{replicate}$ does not resemble the 
+density of the true data $y$, indicating that the model struggles to capture 
+the underlying data distribution.
 
-pp_check(fit)
-- include for linear regression models
-- temporarily include for time-series models.
+Second, the linear model with fossil fuel production share shows a better fit. 
+However, the posterior predictive density of $y_\text{replicate}$ exhibits a 
+bimodal distribution, whereas the true data is unimodal. This discrepancy suggests 
+that the linear model might fail to capture certain patterns in the data.
 
-TODO
-1x3 plots of pp_check for linear regresion models
-Description and inference from the plots
+Lastly, the linear model with multiple covariates behaves similarly to the linear 
+model with only fossil fuels. It also exhibits a bimodal distribution for \(y_\text{replicate}\). This implies that fossil fuels might be the dominant 
+predictor for the emission coefficient, with its effect outweighing other 
+covariates. Additionally, this suggests that there might be non-linear relationships 
+in the data that are not captured by the linear models.
 
+```{r, echo=FALSE}
+ggarrange(
+  pp_check(lin_reg_renewable_fit) + labs(title="LinReg Renewable"), 
+  pp_check(lin_reg_fossil_fuel_fit)+ labs(title="LinReg FossilFuels"), 
+  pp_check(lin_reg_multiple_fit)+ labs(title="LinReg Multiple"), 
+  common.legend=TRUE, 
+  ncol=3)
+```
 
-TODO
-1x3 plots of pp_check for time series models
-Description and inference from the plots
+TODO: add comments on pp_check of time series models
+
+```{r, echo=FALSE}
+# ggarrange(
+#   pp_check(ar_fit) + labs(title="AR(1)"), 
+#   pp_check(ar_renewable_fit)+ labs(title="AR(1) + Renewable"), 
+#   pp_check(ar_fossil_fuel_fit)+ labs(title="AR(1) + FossilFuels"), 
+#   common.legend=TRUE, 
+#   ncol=3)
+```
 
 
 # 9. Predictive performance assessment
 
-Absolute error? Relative error? Quantify performance
+The observations in Section 8 above are further confirmed with the time series predictive plots.
 
-For all models
+First, we can see that the linear model with fossil fuels fits very well to the 
+original time series. The predictions fitted values $y_{\text{replicate}}$ closely 
+align with the observed data $y$ across most data points, and the credible intervals 
+are relatively narrow, reflecting the strong predictive power of fossil fuel 
+production share as a covariate.
 
-pp_check(fit, type = "ribbon")
+In contrast, the linear model with renewable production share does not fit as 
+well. The credible intervals are wider, and the predicted values $y_{\text{replicate}}$ 
+deviate more significantly from the observed data $y$. This supports the conclusion 
+that renewable production share alone does not adequately capture the variability in CO2 emissions.
+
+```{r, echo=FALSE}
+ggarrange(
+  pp_check(lin_reg_renewable_fit, type = "ribbon") + labs(title="LinReg Renewable"), 
+  pp_check(lin_reg_fossil_fuel_fit, type = "ribbon")+ labs(title="LinReg FossilFuels"), 
+  pp_check(lin_reg_multiple_fit, type = "ribbon")+ labs(title="LinReg Multiple"), 
+  common.legend=TRUE, 
+  ncol=3)
+```
+
+TODO: add comments for time series models
+
+```{r, echo=FALSE}
+# ggarrange(
+#   pp_check(ar_fit, type = "ribbon") + labs(title="AR(1)"), 
+#   pp_check(ar_renewable_fit, type = "ribbon")+ labs(title="AR(1) + Renewable"), 
+#   pp_check(ar_fossil_fuel_fit, type = "ribbon")+ labs(title="AR(1) + FossilFuels"), 
+#   common.legend=TRUE, 
+#   ncol=3)
+```
 
 # 10. Sensitivity analysis
 
-Checking whether the result changes a lot if prior is changed
+We create a function `prior_check()` that allows us to compare the posterior
+distributions of all parameters given different priors.
 
-For all models
-
-Fit with different priors, plot the posterior distributions (Exercise 2.)
+```{r, results='hide'}
+prior_check <- function(priors, model) {
+  draws <- priors %>%
+  map(~ as.matrix(update(model, prior=.x, seed=seed)))
+  
+  draws_to_plot <- function(draws) {
+    params <- head(colnames(draws[[1]]), -2)
+    data <- list()
+    for (p in params) {
+        for (name in names(draws)) {
+          t <- draws[[name]][,p]
+          for (s in 1:length(t)) {
+            data[[p]][[name]][[s]] = t[[s]]
+          }
+        }
+    }
+    data
+  }
+  dt <- draws_to_plot(draws)
+  
+  plot_for_loop <- function(df, x_var) {
+    df.long <- melt(df)
+      ggplot(df.long, aes(x= value, fill=L1)) +
+      geom_density(alpha=0.7) +
+      labs(x = x_var) +
+      theme_classic(base_size = 12)
+  }
+  
+  plot_list <- list()
+  params <- head(colnames(draws[[1]]), -2)
+  for (p in params) {
+    plot_list[[length(plot_list)+1]] <- plot_for_loop(dt[[p]], p)
+  }
+  
+  # Combine all plots
+  ggarrange(plotlist=plot_list, common.legend=TRUE)
+}
+```
 
 ## 10.1. Time series models {#ts-sensitivity}
 
@@ -508,7 +593,107 @@ TODO: sensitivity plot for time series model
 
 ## 10.2. Linear Regression {#linreg-sensitivity}
 
-TODO: sensitivity plot for linear regression model
+### 10.2.1. Single covariate $RenewableProductionShare$:
+
+```{r}
+priors_lin_reg_renewable <- list(
+  i500_renewable10_sigma10 = c(
+    prior(normal(0, 500), class = "b", coef = "Intercept"),
+    prior(normal(0, 10), class = "b", coef = "RenewableProductionShare"),
+    prior(normal(0, 10), class = "sigma")
+  ),
+  i50_renewable1_sigma1 = c(
+    prior(normal(0, 50), class = "b", coef = "Intercept"),
+    prior(normal(0, 1), class = "b", coef = "RenewableProductionShare"),
+    prior(normal(0, 1), class = "sigma")
+  ),
+  i150_100_renewable5_sigma5 = c(
+    prior(normal(150, 100), class = "b", coef = "Intercept"),
+    prior(normal(0, 5), class = "b", coef = "RenewableProductionShare"),
+    prior(normal(0, 5), class = "sigma")
+  )
+)
+
+prior_check(priors_lin_reg_renewable, lin_reg_renewable_fit)
+```
+
+From the density plots of the posterior distributions under different priors, we 
+observe the following:
+- All parameters are quite sensitive to different priors, especially for more informative priors.
+- The model's posterior estimate for the intercept is moderately sensitive to the prior, particularly for priors with stronger assumption for mean.
+- The posterior for `RenewableProductionShare` is relatively robust to the prior mean but more sensitive to the prior variance, indicating strong data influence.
+- The posterior for `sigma` is highly sensitive to the prior variance, indicating weak data influence and high reliance on prior information.
+
+### 10.2.2. One covariate $FossilFuelsPeatProductionShare$:
+
+```{r}
+priors_lin_reg_fossil_fuel <- list(
+  i500_fossil10_sigma10 = c(
+    prior(normal(0, 500), class = "b", coef = "Intercept"),
+    prior(normal(0, 10), class = "b", coef = "FossilFuelsPeatProductionShare"),
+    prior(normal(0, 10), class = "sigma")
+  ),
+  i50_fossil1_sigma1 = c(
+    prior(normal(0, 50), class = "b", coef = "Intercept"),
+    prior(normal(0, 1), class = "b", coef = "FossilFuelsPeatProductionShare"),
+    prior(normal(0, 1), class = "sigma")
+  ),
+  i150_100_fossil5_sigma5 = c(
+    prior(normal(150, 100), class = "b", coef = "Intercept"),
+    prior(normal(0, 5), class = "b", coef = "FossilFuelsPeatProductionShare"),
+    prior(normal(0, 5), class = "sigma")
+  )
+)
+
+prior_check(priors_lin_reg_fossil_fuel, lin_reg_fossil_fuel_fit)
+```
+
+From the density plots of the posterior distributions under different priors, we observe the following:
+- All parameters are still somewhat sensitive to very small prior variances (i.e., much more informative priors), indicating that the choice of prior can still influence the posterior when priors are overly restrictive.
+- The intercept and slope for FossilFuelsPeatProductionShare are not highly sensitive to different prior settings. Their posterior distributions remain relatively stable across priors, showing strong data influence on these parameters.
+- The posterior for sigma remains highly sensitive to the prior variance, suggesting that the data has weak influence on the variance of the posterior. This indicates that the residual variance is not well-determined by the data and 
+relies heavily on prior information.
+
+
+### 10.2.3. Multiple covariates for different kind of energy production:
+
+
+```{r}
+priors_lin_reg_multiple_fix <- list(
+  i250_beta5_sigma10 = c(
+    prior(normal(0, 250), class = "b", coef = "Intercept"),
+    prior(normal(0, 5), class = "b", coef = "FossilFuelsPeatProductionShare"),
+    prior(normal(0, 5), class = "b", coef = "NuclearEnergyProductionShare"),
+    prior(normal(0, 5), class = "b", coef = "NetImportsProductionShare"),
+    prior(normal(0, 5), class = "b", coef = "OthersProductionShare"),
+    prior(normal(0, 10), class = "sigma")
+  ),
+  i50_beta1_sigma1 = c(
+    prior(normal(0, 50), class = "b", coef = "Intercept"),
+    prior(normal(0, 1), class = "b", coef = "FossilFuelsPeatProductionShare"),
+    prior(normal(0, 1), class = "b", coef = "NuclearEnergyProductionShare"),
+    prior(normal(0, 1), class = "b", coef = "NetImportsProductionShare"),
+    prior(normal(0, 1), class = "b", coef = "OthersProductionShare"),
+    prior(normal(0, 1), class = "sigma")
+  ),
+  i250_beta10_sigma10 = c(
+    prior(normal(0, 250), class = "b", coef = "Intercept"),
+    prior(normal(0, 10), class = "b", coef = "FossilFuelsPeatProductionShare"),
+    prior(normal(0, 10), class = "b", coef = "NuclearEnergyProductionShare"),
+    prior(normal(0, 10), class = "b", coef = "NetImportsProductionShare"),
+    prior(normal(0, 10), class = "b", coef = "OthersProductionShare"),
+    prior(normal(0, 10), class = "sigma")
+  )
+)
+
+prior_check(priors_lin_reg_multiple_fix, lin_reg_multiple_fix_fit)
+```
+
+From the density plots of the posterior distributions under different priors, 
+we can see that all variables are still somewhat sensitive to the very informative
+priors, but the changes in posterior distributions are not significant. However,
+slope of `OthersProductionShare` and `sigma` are still very sensitive and dependent
+on the priors.
 
 ## 10.3 Time series with exogeneous {#hybrid-sensitivity}
 
@@ -516,14 +701,61 @@ TODO: sensitivity plot for ts + linear models
 
 # 11. Model comparison (e.g. with LOO-CV)
 
- TODO: LFO code and ELPD for all models
+TODO: LFO code and ELPD for all models
 
-# 12. Discussion of issues and potential improvements
+# 12. Discussion of Issues and Potential Improvements
+
+## 12.1. Issues
+
+The first issue is that our dataset is small and lacks variability. This restricts 
+us to using relatively basic models and prevents the application of more advanced 
+techniques, such as hierarchical models.
+
+In addition, the available time series is fairly short, making it challenging to 
+accurately assess the model's predictive performance.Due to the short time series, 
+our analysis was limited to understanding emissions through their time-series 
+characteristics and their dynamics with production shares of different energy sources. 
+We were unable to make meaningful predictions or forecasts about future emissions
+as we stated earlier in the introduction.
+
+## 12.2. Potential Improvements
+
+First of all, future work could focus more about explaining the bimodal replicates
+distribution of linear models using fossil fuels production share. One potential
+explanation is the presence of non-linearity that our linear models could not explain.
+Therefore, one can try to use non-linear models or incorporate non-linear terms 
+into the existing linear models. This approach could capture more complex 
+relationships between emissions and production shares of energy sources,
+especially since the dynamics might not be strictly linear.
+
+Secondly, one can expanding the scope of the analysis to include predictors 
+beyond the production share of energy sources. For example, consumption data, 
+especially the share of renewable energy in consumption, could provide additional 
+insights. Other potential predictors might include economic variables, 
+government policies, or technological changes influencing energy production 
+and consumption, which are harder to give concrete examples, but intuitively
+they should be able to contribute to the predictive performance.
+
+Lastly, being able to extend the dataset will open many more doors. Acquiring 
+more data, both in terms of time (longer time series) and scope (broader 
+variability), would allow for the use of advanced models such as hierarchical
+models and improve the robustness of the analysis.
 
 # 13. Conclusion what was learned from the data analysis
 
+From the data analysis, we learned the following key insights:
+- The share of fossil fuels and peat in production is a very strong predictor for the emission coefficient. Across all models, this covariate consistently demonstrated its dominant influence on emissions, with robust and stable posterior estimates.
+- Contrary to our initial expectations, the share of renewable energy in production is not a strong predictive covariate for emissions. Models that included renewable production share as a primary predictor did not perform well, showing weaker alignment with the observed data.
+
+The analysis underscores that the share of fossil fuels remains the dominant driver of CO2-equivalent emissions. Renewable production share, though an important policy focus, does not currently hold strong predictive power for emissions in the dataset analyzed. 
+
 # 14. Self-reflection of what the group learned while making the project
 
+This project was our first experience using `brms` and `Stan` with real-world data, and we’re very happy with how much we learned throughout the process. One of the major challenges we faced was dealing with MCMC divergence for the first time. Debugging and fixing it gave us valuable insight into how our assumptions and model formulations impact the results. It was rewarding to revisit and refine our initial model to resolve the issue.
+
+Working with real-world data also highlighted how different it is compared to the clean and structured datasets we typically encounter in homework. Our posterior predictive checks weren’t as good as we’re used to seeing, and the dataset we had was limited in both size and scope. We now recognize the importance of having access to richer data and additional predictors, as this could significantly improve the analysis.
+
+That said, we’re proud of the model we built using the techniques learned in this course. Despite the challenges, we were able to identify key insights, such as the dominant role of fossil fuel production in predicting emissions. We're also grateful for existence of such modern software like `brms`, which has removed all the heavy-duty coding work width such complex samplers and algorithms, and allowed us to focus on interpreting the results and understanding the data.
 
 
 
