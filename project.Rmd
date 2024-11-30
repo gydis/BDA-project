@@ -13,9 +13,24 @@ editor_options:
 
 ```{r include=FALSE, results='hide'}
 # Install/import packages
+if (!require(readr)) {
+    install.packages("readr")
+    library(readr)
+}
+
 if (!require(tidybayes)) {
     install.packages("tidybayes")
     library(tidybayes)
+}
+
+if (!require(rlang)) {
+    install.packages("rlang")
+    library(rlang)
+}
+
+if (!require(purrr)) {
+    install.packages("purrr")
+    library(purrr)
 }
 
 if (!require(brms)) {
@@ -26,6 +41,36 @@ if (!require(brms)) {
 if(!require(ggplot2)){
     install.packages("ggplot2")
     library(ggplot2)
+}
+
+if(!require(ggplot2)){
+    install.packages("ggplot2")
+    library(ggplot2)
+}
+
+if(!require(bayesplot)){
+    install.packages("bayesplot")
+    library(bayesplot)
+}
+
+if(!require(ggpubr)){
+    install.packages("ggpubr")
+    library(ggpubr)
+}
+
+if (!require(loo)) {
+  install.packages("loo")
+  library(loo)
+}
+
+if (!require(priorsense)) {
+  install.packages("priorsense")
+  library(priorsense)
+}
+
+if (!require(reshape2)) {
+  install.packages("reshape2")
+  library(reshape2)
 }
 
 if(!require(cmdstanr)){
@@ -46,6 +91,10 @@ if(!cmdstan_installed()){
 seed <- 42
 
 set.seed(seed)
+```
+
+```{r include=FALSE, results='hide'}
+emission <- read_csv("./data_processing/data/data.csv", show_col_types = FALSE)
 ```
 
 # 1. Introduction
@@ -120,7 +169,7 @@ where:
 - $y$ is the target variable $CO2EquivEmission$,
 - $\alpha \in \mathbb{R}$ is the unknown scalar intercept,
 - $\beta_i \in \mathbb{R}$ are the unknown scalar slopes for each production share,
-- $\x_i$ represents the production share of energy source $i$ (e.g., renewable, fossil fuels, nuclear), 
+- $x_i$ represents the production share of energy source $i$ (e.g., renewable, fossil fuels, nuclear), 
 - $\varepsilon \sim \mathcal{N}(0, \sigma^2)$  the noise, and
 - $k$ is the total number of energy sources included in the model.
 
@@ -158,7 +207,7 @@ $$
 3. Multiple Covariates: Full linear model with all types of energy production
 
 $$
-\begin{align*}
+\begin{aligned}
 \text{CO2EquivEmission} 
 = \alpha 
 &+ \beta_1 \cdot \text{RenewableProductionShare} \\
@@ -166,7 +215,7 @@ $$
 &+ \beta_3 \cdot \text{NuclearEnergyProductionShare} \\
 &+ \beta_4 \cdot \text{NetImportsProductionShare} \\
 &+ \beta_5 \cdot \text{OthersProductionShare}
-\end{align*}
+\end{aligned}
 $$
 
 
@@ -317,15 +366,15 @@ The models are run with 4 chains, 2000 iterations, and 1000 warm-ups.
 #   seed = seed
 # )
 
-lin_reg_multiple_fit <- brm(
-  formula = lin_reg_multiple_formula,
-  prior = lin_reg_multiple_priors,
-  data = emission,
-  iter = 2000,
-  warmup = 1000,
-  chains = 4,
-  seed = seed
-)
+#lin_reg_multiple_fit <- brm(
+#  formula = lin_reg_multiple_formula,
+#  prior = lin_reg_multiple_priors,
+#  data = emission,
+#  iter = 2000,
+#  warmup = 1000,
+#  chains = 4,
+#  seed = seed
+#)
 ```
 
 ## 6.3 Time series with exogeneous {#hybrid-inference}
@@ -341,7 +390,7 @@ According to the MCMC inference summary below, there is no sign of divergence in
 # summary(ar_fossil_fuel_fit)
 # summary(lin_reg_renewable_fit)
 # summary(lin_reg_fossil_fuel_fit)
-summary(lin_reg_multiple_fit) # Divergence problem
+#summary(lin_reg_multiple_fit) # Divergence problem
 ```
 
 Multiple Covariate Linear Regression Model
@@ -360,14 +409,14 @@ pairs(emission[, c("RenewableProductionShare", "FossilFuelsPeatProductionShare")
 As a result, we use a linear regression with these covariates:
 
 $$
-\begin{align*}
+\begin{aligned}
 \text{CO2EquivEmission} 
 = \alpha 
 &+ \beta_1 \cdot \text{FossilFuelsPeatProductionShare} \\
 &+ \beta_2 \cdot \text{NuclearEnergyProductionShare} \\
 &+ \beta_3 \cdot \text{NetImportsProductionShare} \\
 &+ \beta_4 \cdot \text{OthersProductionShare}
-\end{align*}
+\end{aligned}
 $$
 
 Additionally, the estimated values for the intercept and slopes were in a much
