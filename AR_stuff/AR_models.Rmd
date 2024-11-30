@@ -37,6 +37,11 @@ if(!require(ggplot2)){
     library(ggplot2)
 }
 
+if(!require(bayesplot)){
+    install.packages("bayesplot")
+    library(bayesplot)
+}
+
 if(!require(ggpubr)){
     install.packages("ggpubr")
     library(ggpubr)
@@ -86,9 +91,9 @@ head(emission)
 
 # 3 & 4. Model description & priors: Autoregressive models
 
-In addition to the linear models, we will also try using models with an AR component to capture possible "inertia" of CO2 emissions caused by changes in the energy infrastructure. 
+In addition to the linear models, we will also try using models with an AR component on the CO2 emission coefficient to capture possible "inertia" of CO2 emissions caused by changes in the energy infrastructure. 
 
-Using one covariate $RenewableProductionShare$:
+Using one covariate $RenewableProductionShare$ and an AR(1):
 
 $$
 \text{CO2EquivEmission} = \alpha + AR(1)
@@ -98,7 +103,7 @@ $$
 \text{CO2EquivEmission} = \alpha + \beta \cdot \text{RenewableProductionShare} + AR(1)
 $$
 
-Using one covariate $FossilFuelsPeatProductionShare$:
+Using one covariate $FossilFuelsPeatProductionShare$ and an AR(1):
 
 $$
 \text{CO2EquivEmission} = \alpha + \beta \cdot \text{FossilFuelsPeatProductionShare} + AR(1)
@@ -106,9 +111,7 @@ $$
 
 # 5. brms/Stan code & # 6. MCMC inference
 
-How the MCMC inference was run, i.e., what options were used:
-- command to run MCMC inference
-- a textual explanation of the choice of options
+We have run the MCMC inference using the same options as for the linear models. We performed 2000 iterations with 1000 left out for warmup and 4 MCMC chains. 
 
 ## 5.1 AR(1):
 ```{r}
@@ -118,7 +121,7 @@ ar_formula <- bf(
 get_prior(ar_formula, data=emission)
 ar_priors <- c(
   prior(normal(0, 1), class = "ar"),
-  prior(normal(0,1000), class="Intercept"),
+  prior(normal(0,500), class="Intercept"),
   prior(normal(0, 10), class = "sigma")
 )
 
@@ -143,8 +146,8 @@ ar_renewable_formula <- bf(
 )
 
 ar_renewable_priors <- c(
-  prior(normal(0, 1000), class = "b", coef = "Intercept"),
-  prior(normal(0, 50), class = "b", coef = "RenewableProductionShare"),
+  prior(normal(0, 500), class = "b", coef = "Intercept"),
+  prior(normal(0, 10), class = "b", coef = "RenewableProductionShare"),
   prior(normal(0, 10), class = "sigma"),
   prior(normal(0, 1), class = "ar")
   )
@@ -170,8 +173,8 @@ ar_fossil_fuel_formula <- bf(
 )
 
 ar_fossil_fuel_priors <- c(
-  prior(normal(0, 1000), class = "b", coef = "Intercept"),
-  prior(normal(0, 50), class = "b", coef = "FossilFuelsPeatProductionShare"),
+  prior(normal(0, 500), class = "b", coef = "Intercept"),
+  prior(normal(0, 10), class = "b", coef = "FossilFuelsPeatProductionShare"),
   prior(normal(0, 10), class = "sigma"),
   prior(normal(0, 1), class = "ar")
 )
@@ -191,12 +194,7 @@ ar_fossil_fuel_fit <- brm(
 
 # 7. Convergence diagnosis
 
-Interpretation of these values:
-- R-hat convergence diagnostics
-- HMC specific convergence diagnostics (divergences, tree depth)
-- ESS diagnostics
-
-If convergence was not good, what did we do to improve?
+MCMC showed no signs of divergence: we had no divergent transitions, the $\hat R$ values for all of our models are 1. Even though the effective samples sizes differ from the number of samples significantly, they still show a decent amount indicating that the sampling process had no serious divergence issues and can be used for analysis.
 
 ```{r}
 summary(ar_fit)
@@ -209,14 +207,20 @@ summary(ar_fossil_fuel_fit)
 
 # 8. Posterior predictive checks
 
-What can be interpreted? What was done if the checks indicated misspecifications?
+We can see that the plain AR model, expectedly, performed the worst: Some draws indicate bimodal distribtuions, while other draws have too light tails and overestimate density for the middle values. 
+
+AR model with a renewable fuel share covariate performs significantly better as its posterior matches that of data more closely. We still have a problem with tails, where the left side of the posterior is too heavy-tailed and the right side still undersetimates thickness for some draws. We also still observe overestimation of the middle values density in the posterior. 
+
+AR model with the fossil fuel covariate shows the best fit of the posterior to data. The model still produces a bimodal distribution sometimes, as well as still underestimates the right tail values. 
 
 ```{r}
-pp_check(ar_fit)
+plot1 <- pp_check(ar_fit) + labs(title="AR(1)")
 
-pp_check(ar_renewable_fit)
+plot2 <- pp_check(ar_renewable_fit)+ labs(title="AR(1) + Renewable")
 
-pp_check(ar_fossil_fuel_fit)
+plot3 <- pp_check(ar_fossil_fuel_fit)+ labs(title="AR(1) + Fossil")
+
+ggarrange(plot1, plot2, plot3, common.legend=TRUE, ncol=3) 
 ```
 
 
@@ -246,53 +250,109 @@ powerscale_plot_dens(ar_renewable_fit)
 powerscale_plot_dens(ar_fossil_fuel_fit)
 ```
 ```{r}
-priors <- list(
+prior_check <- function(priors, model) {
+  draws <- priors %>%
+  map(~ as.matrix(update(ar_fit, prior=.x, seed=seed)))
+  
+  draws_to_plot <- function(draws) {
+    params <- head(colnames(draws[[1]]), -2)
+    data <- list()
+    for (p in params) {
+        for (name in names(draws)) {
+          t <- draws[[name]][,p]
+          for (s in 1:length(t)) {
+            data[[p]][[name]][[s]] = t[[s]]
+          }
+        }
+    }
+    data
+  }
+  dt <- draws_to_plot(draws)
+  
+  plot_for_loop <- function(df, x_var) {
+    df.long <- melt(df)
+      ggplot(df.long, aes(x= value, fill=L1)) +
+      geom_density(alpha=0.7) +
+      labs(x = x_var) +
+      theme_classic(base_size = 12)
+  }
+  
+  plot_list <- list()
+  for (p in params) {
+    plot_list[[length(plot_list)+1]] <- plot_for_loop(dt[[p]], p)
+  }
+  
+  # Combine all plots
+  ggarrange(plotlist=plot_list, common.legend=TRUE)
+}
+```
+```{r}
+priors_ar <- list(
   ar1_i1000_sigma10=c(
     prior(normal(0, 1), class = "ar"),
     prior(normal(0,1000), class="Intercept"),
     prior(normal(0, 10), class = "sigma")
   ),
-  ar1_i500_sigma100=c(
-    prior(normal(0, 1), class = "ar"),
+  ar2_i500_sigma100=c(
+    prior(normal(0, 2), class = "ar"),
     prior(normal(0,500), class="Intercept"),
     prior(normal(0, 100), class = "sigma")
+  ),
+  ar3_i250_sigma200=c(
+    prior(normal(0, 3), class = "ar"),
+    prior(normal(0, 250), class="Intercept"),
+    prior(normal(0, 200), class = "sigma")
   )
 )
 
-draws <- priors %>%
-  map(~ as.matrix(update(ar_fit, prior=.x, seed=seed)))
+priors_ar_renewable <- list(
+  ar1_i1000_b50_sigma_10=c(
+  prior(normal(0, 1000), class = "b", coef = "Intercept"),
+  prior(normal(0, 50), class = "b", coef = "RenewableProductionShare"),
+  prior(normal(0, 10), class = "sigma"),
+  prior(normal(0, 1), class = "ar")
+  ),
+  ar2_i500_b100_sigma_100=c(
+  prior(normal(0, 500), class = "b", coef = "Intercept"),
+  prior(normal(0, 100), class = "b", coef = "RenewableProductionShare"),
+  prior(normal(0, 100), class = "sigma"),
+  prior(normal(0, 2), class = "ar")
+  ),
+  ar3_i250_b200_sigma_250=c(
+  prior(normal(0, 250), class = "b", coef = "Intercept"),
+  prior(normal(0, 200), class = "b", coef = "RenewableProductionShare"),
+  prior(normal(0, 250), class = "sigma"),
+  prior(normal(0, 3), class = "ar")
+  )
+)
+
+priors_ar_fossil <- list(
+  ar1_i1000_b50_sigma_10=c(
+  prior(normal(0, 1000), class = "b", coef = "Intercept"),
+  prior(normal(0, 50), class = "b", coef = "FossilFuelsPeatProductionShare"),
+  prior(normal(0, 10), class = "sigma"),
+  prior(normal(0, 1), class = "ar")
+  ),
+  ar2_i500_b100_sigma_100=c(
+  prior(normal(0, 500), class = "b", coef = "Intercept"),
+  prior(normal(0, 100), class = "b", coef = "FossilFuelsPeatProductionShare"),
+  prior(normal(0, 100), class = "sigma"),
+  prior(normal(0, 2), class = "ar")
+  ),
+  ar3_i250_b200_sigma_250=c(
+  prior(normal(0, 250), class = "b", coef = "Intercept"),
+  prior(normal(0, 200), class = "b", coef = "FossilFuelsPeatProductionShare"),
+  prior(normal(0, 250), class = "sigma"),
+  prior(normal(0, 3), class = "ar")
+  )
+)
+prior_check(priors_ar, ar_fit)
 ```
 ```{r}
-draws_to_plot <- function(draws) {
-  params <- head(colnames(draws[[1]]), -2)
-  data <- list()
-  for (p in params) {
-      for (name in names(draws)) {
-        t <- draws[[name]][,p]
-        for (s in 1:length(t)) {
-          data[[p]][[name]][[s]] = t[[s]]
-        }
-      }
-  }
-  data
-}
-dt <- draws_to_plot(draws)
-
-plot_for_loop <- function(df, x_var) {
-  df.long <- melt(df)
-    ggplot(df.long, aes(x= value, fill=L1)) +
-    geom_density(alpha=0.7) +
-    labs(x = x_var) +
-    theme_classic(base_size = 12)
-}
-
-plot_list <- list()
-for (p in params) {
-  plot_list[[length(plot_list)+1]] <- plot_for_loop(dt[[p]], p)
-}
-
-# Combine all plots
-ggarrange(plotlist=plot_list, common.legend=TRUE)
+prior_check(priors_ar_renewable, ar_renewable_fit)
+```
+```{r}
+prior_check(priors_ar_fossil, ar_fossil_fuel_fit)
 ```
 
 # 11. Model comparison (e.g. with LOO-CV)
