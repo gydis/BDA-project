@@ -13,14 +13,20 @@ editor_options:
 
 ```{r include=FALSE, results='hide'}
 # Install/import packages
-library(readr)
+if (!require(readr)) {
+    install.packages("readr")
+    library(readr)
+}
 
 if (!require(tidybayes)) {
     install.packages("tidybayes")
     library(tidybayes)
 }
 
-library(rlang)
+if (!require(rlang)) {
+    install.packages("rlang")
+    library(rlang)
+}
 
 if (!require(purrr)) {
     install.packages("purrr")
@@ -30,6 +36,11 @@ if (!require(purrr)) {
 if (!require(brms)) {
     install.packages("brms")
     library(brms)
+}
+
+if(!require(ggplot2)){
+    install.packages("ggplot2")
+    library(ggplot2)
 }
 
 if(!require(ggplot2)){
@@ -91,13 +102,27 @@ head(emission)
 
 # 3 & 4. Model description & priors: Autoregressive models
 
-In addition to the linear models, we will also try using models with an AR component on the CO2 emission coefficient to capture possible "inertia" of CO2 emissions caused by changes in the energy infrastructure. 
+In addition to the linear models, we will also try using models with an AR component on the CO2 emission coefficient to capture possible "inertia" of CO2 emissions caused by changes in the energy infrastructure, as well as other factors besides the change in the distribution of the energy production methods such as improvements in energy production technology reducing emissions in general.
 
-Using one covariate $RenewableProductionShare$ and an AR(1):
+The plain autoregressive model is given by
+$$
+y_i = \alpha + \sum_{j=1}^p \phi_j y_{i-j} + \varepsilon 
+$$
+where:
+- $y_i$ is the $i$th observation of the target variable $CO2EquivEmission$,
+- $\alpha \in \mathbb{R}$ is the unknown scalar intercept,
+- $\phi_j \in \mathbb{R}$ are the unknown regression coefficients for each lag,
+- $\varepsilon \sim \mathcal{N}(0, \sigma^2)$ the noise, and
+- $p$ is the order of the autoregressive model.
+
+The Bayesian formulation of the model is practically the same as that for the linear models, having added AR(1) component to the mean of the model distribution. 
+
+We are going to add only an AR component of order 1, i.e. we use the previous year's observation to predict the next one. The model's mean is then given by:
 
 $$
 \text{CO2EquivEmission} = \alpha + AR(1)
 $$
+Using one covariate $RenewableProductionShare$ and an AR(1):
 
 $$
 \text{CO2EquivEmission} = \alpha + \beta \cdot \text{RenewableProductionShare} + AR(1)
@@ -109,19 +134,25 @@ $$
 \text{CO2EquivEmission} = \alpha + \beta \cdot \text{FossilFuelsPeatProductionShare} + AR(1)
 $$
 
+We use the same prior choices as for the linear models. The AR regression coefficient has the following weakly informative prior:
+$$
+\phi \sim \mathcal{N}(0, 1)
+$$
+
+
 # 5. brms/Stan code & # 6. MCMC inference
 
 We have run the MCMC inference using the same options as for the linear models. We performed 2000 iterations with 1000 left out for warmup and 4 MCMC chains. 
 
 ## 5.1 AR(1):
-```{r}
+```{r results='hide'}
 ar_formula <- bf(
   CO2EquivEmission ~ ar(time = Year, p=1), family="Gaussian"
 )
 get_prior(ar_formula, data=emission)
 ar_priors <- c(
   prior(normal(0, 1), class = "ar"),
-  prior(normal(0,500), class="Intercept"),
+  prior(normal(0, 500), class="Intercept"),
   prior(normal(0, 10), class = "sigma")
 )
 
@@ -138,7 +169,7 @@ ar_fit <- brm(
 
 ## 5.2. One covariate $RenewableProductionShare$ and AR(1):
 
-```{r}
+```{r results='hide'}
 ar_renewable_formula <- bf(
   CO2EquivEmission ~ RenewableProductionShare + ar(time = Year, p=1),
   family = "gaussian",
@@ -165,7 +196,7 @@ ar_renewable_fit <- brm(
 
 ## 5.3. One covariate $FossilFuelsPeatProductionShare$ and AR(1): 
 
-```{r}
+```{r results='hide'}
 ar_fossil_fuel_formula <- bf(
   CO2EquivEmission ~ FossilFuelsPeatProductionShare + ar(time = Year, p=1),
   family = "gaussian",
@@ -194,7 +225,7 @@ ar_fossil_fuel_fit <- brm(
 
 # 7. Convergence diagnosis
 
-MCMC showed no signs of divergence: we had no divergent transitions, the $\hat R$ values for all of our models are 1. Even though the effective samples sizes differ from the number of samples significantly, they still show a decent amount indicating that the sampling process had no serious divergence issues and can be used for analysis.
+MCMC showed no signs of divergence: we had no divergent transitions, the $\hat R$ values for all of our models are <1.05. Even though the effective samples sizes differ from the number of samples significantly, they still show a decent amount indicating that the sampling process had no serious divergence issues and can be used for analysis.
 
 ```{r}
 summary(ar_fit)
@@ -226,29 +257,20 @@ ggarrange(plot1, plot2, plot3, common.legend=TRUE, ncol=3)
 
 # 9. Predictive performance assessment
 
-Absolute error? Relative error? Quantify performance
+Below you can find the plots for models' predicitons. The light blue line is the mean, dark-blue shaded area shows the 50% CI and the light-blue area shows the 95
 
 ```{r}
-pp_check(ar_fit, type = "ribbon")
+p1 <- pp_check(ar_fit, type = "ribbon") + labs(title="AR(1)")
 
-pp_check(ar_renewable_fit, type = "ribbon")
+p2 <- pp_check(ar_renewable_fit, type = "ribbon") + labs(title="AR(1) + Renewable")
 
-pp_check(ar_fossil_fuel_fit, type = "ribbon")
+p3 <- pp_check(ar_fossil_fuel_fit, type = "ribbon") + labs(title="AR(1) + Fossil")
+
+ggarrange(p1, p2, p3, common.legend=TRUE, ncol=3)
 ```
 
 # 10. Sensitivity analysis
 
-```{r}
-powerscale_sensitivity(ar_fit)
-powerscale_sensitivity(ar_renewable_fit)
-powerscale_sensitivity(ar_fossil_fuel_fit)
-```
-
-```{r}
-powerscale_plot_dens(ar_fit)
-powerscale_plot_dens(ar_renewable_fit)
-powerscale_plot_dens(ar_fossil_fuel_fit)
-```
 ```{r}
 prior_check <- function(priors, model) {
   draws <- priors %>%
@@ -278,6 +300,7 @@ prior_check <- function(priors, model) {
   }
   
   plot_list <- list()
+  params <- head(colnames(draws[[1]]), -2)
   for (p in params) {
     plot_list[[length(plot_list)+1]] <- plot_for_loop(dt[[p]], p)
   }

@@ -15,6 +15,11 @@ if (!require(freqdom)) {
     library(freqdom)
 }
 
+if (!require(priorsense)) {
+  install.packages("priorsense")
+  library(priorsense)
+}
+
 if (!require(brms)) {
     install.packages("brms")
     library(brms)
@@ -152,7 +157,7 @@ plot_acf(co2_ts)
 ```
 Seems that difference of 1 makes the series stationary, and the (2,2) model should work. 
 ```{r}
-model <- Arima(co2_ts_orig, order=c(0,1,0), seasonal=c(0,0,0))
+model <- Arima(co2_ts_orig, order=c(0,1,3), seasonal=c(0,0,0))
 model
 plot_fit(co2_ts_orig, model)
 ```
@@ -164,14 +169,11 @@ data <- combined
 ```
 
 ```{r}
-formula <- bf(co2 ~ renewable_prod + ar(time = year, p=1), family="Gaussian")
-get_prior(formula, data=data)
+formula <- bf(co2 ~ ar(time = year, p=1) + renewable_prod, family="Gaussian")
 ar_priors <- c(
-  prior(normal(0, 0.5), 
-        class = "ar"),
-  prior(normal(0, 2),
-        coef="renewable_prod")
-  )
+  prior(normal(0, 2), class = "ar")
+)
+get_prior(formula, data=data)
 ```
 ```{r}
 fit <- brm(formula = formula, prior = ar_priors, data=data, iter = 10000)
@@ -434,4 +436,16 @@ lfo(fit, 5, data)
 ```
 ```{r}
 pareto_lfo(fit, 5, data)
+```
+
+```{r}
+powerscale_sensitivity(fit)
+```
+
+```{r}
+powerscale_plot_dens(fit)
+```
+
+```{r}
+mcmc_areas(fit, prob=0.8)
 ```
