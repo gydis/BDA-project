@@ -172,6 +172,7 @@ $$
 
 ## 3.3 Combination of time-series and covariates {#hybrid-def}
 
+## 3.2 Model 2 - AR(1)
 
 
 # 4. Prior justification
@@ -424,7 +425,7 @@ For all models
 
 pp_check(fit)
 - include for linear regression models
-- temporarily include for time-series models. TODO: confirm with TA about intuition
+- temporarily include for time-series models.
 
 TODO
 1x3 plots of pp_check for linear regresion models
@@ -443,15 +444,6 @@ Absolute error? Relative error? Quantify performance
 For all models
 
 pp_check(fit, type = "ribbon")
-
-TODO
-1x3 plots of pp_check(fit, type = "ribbon") for linear regresion models
-Description and inference from the plots
-
-
-TODO
-1x3 plots of pp_check(fit, type = "ribbon") for time series models
-Description and inference from the plots
 
 # 10. Sensitivity analysis
 
