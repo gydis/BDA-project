@@ -3,6 +3,7 @@ title: "CS-E5710 Bayesian Data Analysis - PROJECT NAME HERE" # TODO: project nam
 author: "Egor Eremin & Tam Nguyen"
 output: 
   pdf_document:
+    keep_tex: yes
     toc: yes
     toc_depth: 1
 urlcolor: blue
@@ -94,7 +95,7 @@ set.seed(seed)
 ```
 
 ```{r include=FALSE, results='hide'}
-emission <- read_csv("data.csv", show_col_types = FALSE)
+emission <- read_csv("./data_processing/data/data.csv", show_col_types = FALSE)
 ```
 
 # 1. Introduction
@@ -149,13 +150,12 @@ Despite the public availability of this dataset, we are not aware of any existin
 
 In this section, we provide detailed descriptions of the models mentioned in [Section 1.3](#modelling-idea) as follows:
 
-- [Section 3.1](#ts-def) describes the time-series approach, specifically the autoregressive (AR) model.
-- [Section 3.2](#linreg-def) explains the linear regression model, where production shares of energy sources are used as covariates to estimate their impact on the emission coefficient.
+
+- [Section 3.1](#linreg-def) explains the linear regression model, where production shares of energy sources are used as covariates to estimate their impact on the emission coefficient.
+- [Section 3.2](#ts-def) describes the time-series approach, specifically the autoregressive (AR) model.
 - [Section 3.3](#hybrid-def) builds on the insights from the linear regression model in [Section 3.2](#linreg-def) to better understand the dynamics between the emission coefficient and production shares. These covariates are then included as exogenous variables in the AR model from [Section 3.1](#ts-def) to improve the performance.
 
-## 3.1. Time series models {#ts-def}
-
-## 3.2. Linear Regression {#linreg-def}
+## 3.1. Linear Regression {#linreg-def}
 
 
 The linear regression model for CO2-equivalent emissions is defined as follows:
@@ -218,17 +218,53 @@ CO2EquivEmission
 \end{aligned}
 $$
 
+## 3.2. Time series models {#ts-def}
 
-## 3.3 Combination of time-series and covariates {#hybrid-def}
+In addition to the linear models, we will also try using models with an AR component on the CO2 emission coefficient to capture possible "inertia" of CO2 emissions caused by changes in the energy infrastructure, as well as other factors besides the change in the distribution of the energy production methods such as improvements in energy production technology reducing emissions in general.
 
-## 3.2 Model 2 - AR(1)
+The plain autoregressive model is given by
+$$
+y_i = \alpha + \sum_{j=1}^p \phi_j y_{i-j} + \varepsilon 
+$$
+where:
+- $y_i$ is the $i$th observation of the target variable $CO2EquivEmission$,
+- $\alpha \in \mathbb{R}$ is the unknown scalar intercept,
+- $\phi_j \in \mathbb{R}$ are the unknown regression coefficients for each lag,
+- $\varepsilon \sim \mathcal{N}(0, \sigma^2)$ the noise, and
+- $p$ is the order of the autoregressive model.
+
+The mean of a purely autoregressive model is given by:
+$$
+\text{CO2EquivEmission} = \alpha + AR(1)
+$$
+
+## 3.3. Linear models with autoregressive component
+
+The Bayesian formulation of the rest of the models is practically the same as that for the linear models, having added AR(1) component to the mean of the model distribution. 
+
+We are going to add only an AR component of order 1, i.e. we use the previous year's observation to predict the next one. The models' means are then given by:
+
+Using one covariate $RenewableProductionShare$ and an AR(1):
+
+$$
+\text{CO2EquivEmission} = \alpha + \beta \cdot \text{RenewableProductionShare} + AR(1)
+$$
+
+Using one covariate $FossilFuelsPeatProductionShare$ and an AR(1):
+
+$$
+\text{CO2EquivEmission} = \alpha + \beta \cdot \text{FossilFuelsPeatProductionShare} + AR(1)
+$$
+
+We use the same prior choices as for the linear models. The AR regression coefficient has the following weakly informative prior:
+$$
+\phi \sim \mathcal{N}(0, 1)
+$$
 
 
 # 4. Prior justification
 
-## 4.1. Time series models {#ts-prior}
-
-## 4.2. Linear Regression {#linreg-prior}
+## 4.1. Linear Regression {#linreg-prior}
 
 The prior for the regression coefficients $\beta_i$ is specified as:
 
@@ -265,19 +301,21 @@ where $\mathcal{N}^+$ indicates the positive half-normal distribution. This ensu
 that $\sigma$ is strictly positive and reflects weak prior knowledge about the 
 variability in the observations.
 
+## 4.2. Autoregressive models {#ts-prior}
 
-## 4.3 Time series with exogeneous {#hybrid-prior}
+For the models with the autoregressive component, we use the same prior choices as for the linear models. The AR regression coefficient has the following weakly informative prior:
+$$
+\phi \sim \mathcal{N}(0, 1)
+$$
 
 # 5. brms/rstanarm/Stan code
 
 We use `brms` to fit our models. In addition to the `brms` formulas, we also
 define the priors for each model according to our prior justifications above.
 
-## 5.1. Time series models {#ts-code}
+## 5.1. Linear Regression {#linreg-code}
 
-## 5.2. Linear Regression {#linreg-code}
-
-### 5.2.1. Single covariate $RenewableProductionShare$:
+### 5.1.1. Single covariate $RenewableProductionShare$:
 
 ```{r results='hide'}
 lin_reg_renewable_formula <- bf(
@@ -293,7 +331,7 @@ lin_reg_renewable_priors <- c(
 )
 ```
 
-### 5.2.2. One covariate $FossilFuelsPeatProductionShare$:
+### 5.1.2. One covariate $FossilFuelsPeatProductionShare$:
 
 ```{r results='hide'}
 lin_reg_fossil_fuel_formula <- bf(
@@ -309,7 +347,7 @@ lin_reg_fossil_fuel_priors <- c(
 )
 ```
 
-### 5.2.3. Multiple covariates for different kind of energy production:
+### 5.1.3. Multiple covariates for different kind of energy production:
 
 ```{r results='hide'}
 lin_reg_multiple_formula <- bf(
@@ -334,16 +372,60 @@ lin_reg_multiple_priors <- c(
 )
 ```
 
-## 5.3 Time series with exogeneous {#hybrid-code}
+## 5.2. Autoregressive models {#ts-code}
+
+## 5.1 AR(1):
+```{r results='hide'}
+ar_formula <- bf(
+  CO2EquivEmission ~ ar(time = Year, p=1), family="Gaussian"
+)
+ar_priors <- c(
+  prior(normal(0, 1), class = "ar"),
+  prior(normal(0, 500), class="Intercept"),
+  prior(normal(0, 10), class = "sigma")
+)
+```
+
+## 5.2. One covariate $RenewableProductionShare$ and AR(1):
+
+```{r results='hide'}
+ar_renewable_formula <- bf(
+  CO2EquivEmission ~ RenewableProductionShare + ar(time = Year, p=1),
+  family = "gaussian",
+  center = FALSE
+)
+
+ar_renewable_priors <- c(
+  prior(normal(0, 500), class = "b", coef = "Intercept"),
+  prior(normal(0, 10), class = "b", coef = "RenewableProductionShare"),
+  prior(normal(0, 10), class = "sigma"),
+  prior(normal(0, 1), class = "ar")
+  )
+```
+
+## 5.3. One covariate $FossilFuelsPeatProductionShare$ and AR(1): 
+
+```{r results='hide'}
+ar_fossil_fuel_formula <- bf(
+  CO2EquivEmission ~ FossilFuelsPeatProductionShare + ar(time = Year, p=1),
+  family = "gaussian",
+  center = FALSE
+)
+
+ar_fossil_fuel_priors <- c(
+  prior(normal(0, 500), class = "b", coef = "Intercept"),
+  prior(normal(0, 10), class = "b", coef = "FossilFuelsPeatProductionShare"),
+  prior(normal(0, 10), class = "sigma"),
+  prior(normal(0, 1), class = "ar")
+)
+```
 
 
 # 6. MCMC inference
 
 The models are run with 4 chains, 2000 iterations, and 1000 warm-ups.   
 
-## 6.1. Time series models {#ts-inference}
-
-## 6.2. Linear Regression {#linreg-inference}
+## 6.1. Linear Regression {#linreg-inference}
 
 ```{r results='hide'}
 lin_reg_renewable_fit <- brm(
@@ -377,7 +459,39 @@ lin_reg_multiple_fit <- brm(
 )
 ```
 
-## 6.3 Time series with exogeneous {#hybrid-inference}
+## 6.2. Autoregressive models {#ts-inference}
+```{r results='hide'}
+ar_fit <- brm(
+  formula = ar_formula, 
+  prior = ar_priors, 
+  data=emission, 
+  iter = 2000,
+  warmup = 1000,
+  chains = 4,
+  seed = seed
+  )
+
+ar_renewable_fit <- brm(
+  formula = ar_renewable_formula,
+  prior = ar_renewable_priors,
+  data = emission,
+  iter = 2000,
+  warmup = 1000,
+  chains = 4,
+  seed = seed
+)
+
+ar_fossil_fuel_fit <- brm(
+  formula = ar_fossil_fuel_formula,
+  prior = ar_fossil_fuel_priors,
+  data = emission,
+  iter = 2000,
+  warmup = 1000,
+  chains = 4,
+  seed = seed,
+  control=list(adapt_delta = 0.99)
+)
+```
 
 
 # 7. Convergence diagnosis
@@ -385,15 +499,13 @@ lin_reg_multiple_fit <- brm(
 According to the MCMC inference summary below, there is no sign of divergence in most of the models, as we had no divergent transitions, and the $\hat{R}$ values for all of our models are 1. Even though the effective samples sizes differ from the number of samples significantly, they remain sufficiently large, indicating that we still have a good amount of independent samples to use for analysis.
 
 ```{r echo=FALSE}
-# summary(ar_fit)
-# summary(ar_renewable_fit)
-# summary(ar_fossil_fuel_fit)
+summary(ar_fit)
+summary(ar_renewable_fit)
+summary(ar_fossil_fuel_fit)
 summary(lin_reg_renewable_fit)
 summary(lin_reg_fossil_fuel_fit)
 summary(lin_reg_multiple_fit) # Divergence problem
 ```
-
-Multiple Covariate Linear Regression Model
 
 The only exception is the full linear regression model that uses all available
 covariates. For this model, the MCMC summary indicated divergent transitions. 
@@ -496,21 +608,25 @@ ggarrange(
   ncol=3)
 ```
 
-TODO: add comments on pp_check of time series models
+We can see that the plain AR model, expectedly, performed the worst: Some draws indicate bimodal distribtuions, while other draws have too light tails and overestimate density for the middle values. 
+
+AR model with a renewable fuel share covariate performs significantly better as its posterior matches that of data more closely. We still have a problem with tails, where the left side of the posterior is too heavy-tailed and the right side still undersetimates thickness for some draws. We also still observe overestimation of the middle values density in the posterior. 
+
+AR model with the fossil fuel covariate shows the best fit of the posterior to data. The model still produces a bimodal distribution sometimes, as well as still underestimates the right tail values. 
 
 ```{r, echo=FALSE}
-# ggarrange(
-#   pp_check(ar_fit) + labs(title="AR(1)"), 
-#   pp_check(ar_renewable_fit)+ labs(title="AR(1) + Renewable"), 
-#   pp_check(ar_fossil_fuel_fit)+ labs(title="AR(1) + FossilFuels"), 
-#   common.legend=TRUE, 
-#   ncol=3)
+ggarrange(
+ pp_check(ar_fit) + labs(title="AR(1)"), 
+ pp_check(ar_renewable_fit)+ labs(title="AR(1) + Renewable"), 
+ pp_check(ar_fossil_fuel_fit)+ labs(title="AR(1) + FossilFuels"), 
+ common.legend=TRUE, 
+ ncol=3)
 ```
 
 
 # 9. Predictive performance assessment
 
-The observations in Section 8 above are further confirmed with the time series predictive plots.
+The observations in Section 8 above are further confirmed with the time series predictive plots. Below you can find the plots for the models' predicitons. The light blue line is the mean, dark-blue shaded area shows the 50% CI and the light-blue area shows the 90% CI.
 
 First, we can see that the linear model with fossil fuels fits very well to the 
 original time series. The predictions fitted values $y_{\text{replicate}}$ closely 
@@ -532,15 +648,17 @@ ggarrange(
   ncol=3)
 ```
 
-TODO: add comments for time series models
+Below you can find the plots for the models' predicitons. The light blue line is the mean, dark-blue shaded area shows the 50% CI and the light-blue area shows the 90% CI. As you can see, the ribbon plots tell us the same story as the posterior density plots above in terms of the models' performance. 
+
+You can also see that the AR(1) model almost reduces to a lag model, with an additional downward trend. The model with the renewable energy production share covariate follows the data better but has still room for improvement. The last model with the fossil fuel covariate fits data the best, which confirms the intuition that the fossil fuel share is the best predictor for the CO2 emission coefficient. 
 
 ```{r, echo=FALSE}
-# ggarrange(
-#   pp_check(ar_fit, type = "ribbon") + labs(title="AR(1)"), 
-#   pp_check(ar_renewable_fit, type = "ribbon")+ labs(title="AR(1) + Renewable"), 
-#   pp_check(ar_fossil_fuel_fit, type = "ribbon")+ labs(title="AR(1) + FossilFuels"), 
-#   common.legend=TRUE, 
-#   ncol=3)
+ggarrange(
+ pp_check(ar_fit, type = "ribbon") + labs(title="AR(1)"), 
+ pp_check(ar_renewable_fit, type = "ribbon")+ labs(title="AR(1) + Renewable"), 
+ pp_check(ar_fossil_fuel_fit, type = "ribbon")+ labs(title="AR(1) + FossilFuels"), 
+ common.legend=TRUE, 
+ ncol=3)
 ```
 
 # 10. Sensitivity analysis
@@ -551,7 +669,7 @@ distributions of all parameters given different priors.
 ```{r, results='hide'}
 prior_check <- function(priors, model) {
   draws <- priors %>%
-  map(~ as.matrix(update(model, prior=.x, seed=seed)))
+  map(~ as.matrix(update(model, prior=.x, seed=seed, refresh=0)))
   
   draws_to_plot <- function(draws) {
     params <- head(colnames(draws[[1]]), -2)
@@ -587,13 +705,9 @@ prior_check <- function(priors, model) {
 }
 ```
 
-## 10.1. Time series models {#ts-sensitivity}
+## 10.1. Linear Regression {#linreg-sensitivity}
 
-TODO: sensitivity plot for time series model
-
-## 10.2. Linear Regression {#linreg-sensitivity}
-
-### 10.2.1. Single covariate $RenewableProductionShare$:
+### 10.1.1. Single covariate $RenewableProductionShare$:
 
 ```{r}
 priors_lin_reg_renewable <- list(
@@ -614,17 +728,17 @@ priors_lin_reg_renewable <- list(
   )
 )
 
-prior_check(priors_lin_reg_renewable, lin_reg_renewable_fit)
+plot <- prior_check(priors_lin_reg_renewable, lin_reg_renewable_fit)
 ```
 
 From the density plots of the posterior distributions under different priors, we 
 observe the following:
 - All parameters are quite sensitive to different priors, especially for more informative priors.
 - The model's posterior estimate for the intercept is moderately sensitive to the prior, particularly for priors with stronger assumption for mean.
-- The posterior for `RenewableProductionShare` is relatively robust to the prior mean but more sensitive to the prior variance, indicating strong data influence.
+- The posterior for `RenewableProductionShare` is sensitive to the prior variance, indicating strong data influence.
 - The posterior for `sigma` is highly sensitive to the prior variance, indicating weak data influence and high reliance on prior information.
 
-### 10.2.2. One covariate $FossilFuelsPeatProductionShare$:
+### 10.1.2. One covariate $FossilFuelsPeatProductionShare$:
 
 ```{r}
 priors_lin_reg_fossil_fuel <- list(
@@ -655,7 +769,7 @@ From the density plots of the posterior distributions under different priors, we
 relies heavily on prior information.
 
 
-### 10.2.3. Multiple covariates for different kind of energy production:
+### 10.1.3. Multiple covariates for different kind of energy production:
 
 
 ```{r}
@@ -695,13 +809,190 @@ priors, but the changes in posterior distributions are not significant. However,
 slope of `OthersProductionShare` and `sigma` are still very sensitive and dependent
 on the priors.
 
-## 10.3 Time series with exogeneous {#hybrid-sensitivity}
+## 10.2. Time series models {#ts-sensitivity}
 
-TODO: sensitivity plot for ts + linear models
+On the plots below, you can see posteriors of each parameter for different prior configurations. For the prior configurations, we tried different standard deviations of the normal priors for each parameter. The AR regression coefficient was tried with stds of 0.5, 1, 2. The general mean intercept had stds of 100, 500, 1000. The covariate coefficients had stds of 5, 10, 100. And the variance prior had the stds of 10, 100, 200.
+
+```{r}
+priors_ar <- list(
+  ar1_i1000_sigma10=c(
+    prior(normal(0, 1), class = "ar"),
+    prior(normal(0,1000), class="Intercept"),
+    prior(normal(0, 10), class = "sigma")
+  ),
+  ar2_i500_sigma100=c(
+    prior(normal(0, 2), class = "ar"),
+    prior(normal(0,500), class="Intercept"),
+    prior(normal(0, 100), class = "sigma")
+  ),
+  ar0.5_i100_sigma200=c(
+    prior(normal(0, 0.5), class = "ar"),
+    prior(normal(0, 100), class="Intercept"),
+    prior(normal(0, 200), class = "sigma")
+  )
+)
+prior_check(priors_ar, ar_fit) + labs(title="AR(1)")
+```
+
+As you can see, the posteriors of all paramters of AR(1) model are fairly robust to changes in prior variance, except for sigma which is clearly perturbed by the stronger priors.
+
+```{r}
+priors_ar_renewable <- list(
+  ar1_i1000_b5_sigma_10=c(
+  prior(normal(0, 1000), class = "b", coef = "Intercept"),
+  prior(normal(0, 5), class = "b", coef = "RenewableProductionShare"),
+  prior(normal(0, 10), class = "sigma"),
+  prior(normal(0, 1), class = "ar")
+  ),
+  ar2_i500_b10_sigma_100=c(
+  prior(normal(0, 500), class = "b", coef = "Intercept"),
+  prior(normal(0, 10), class = "b", coef = "RenewableProductionShare"),
+  prior(normal(0, 100), class = "sigma"),
+  prior(normal(0, 2), class = "ar")
+  ),
+  ar0.5_i100_b100_sigma_200=c(
+  prior(normal(0, 100), class = "b", coef = "Intercept"),
+  prior(normal(0, 100), class = "b", coef = "RenewableProductionShare"),
+  prior(normal(0, 200), class = "sigma"),
+  prior(normal(0, 0.5), class = "ar")
+  )
+)
+prior_check(priors_ar_renewable, ar_renewable_fit) + labs(title="AR(1) + Renewable")
+```
+For the model with AR(1) component and renewable energy share covariates we see that all of the parameters' posteriors are sensitive to the prior variance to some extent which indicates that the amount of data is not sufficient to overcome strongly informative priors.
+
+```{r}
+priors_ar_fossil <- list(
+  ar1_i1000_b5_sigma_10=c(
+  prior(normal(0, 1000), class = "b", coef = "Intercept"),
+  prior(normal(0, 5), class = "b", coef = "FossilFuelsPeatProductionShare"),
+  prior(normal(0, 10), class = "sigma"),
+  prior(normal(0, 1), class = "ar")
+  ),
+  ar2_i500_b10_sigma_100=c(
+  prior(normal(0, 500), class = "b", coef = "Intercept"),
+  prior(normal(0, 10), class = "b", coef = "FossilFuelsPeatProductionShare"),
+  prior(normal(0, 100), class = "sigma"),
+  prior(normal(0, 2), class = "ar")
+  ),
+  ar0.5_i100_b100_sigma_200=c(
+  prior(normal(0, 100), class = "b", coef = "Intercept"),
+  prior(normal(0, 100), class = "b", coef = "FossilFuelsPeatProductionShare"),
+  prior(normal(0, 200), class = "sigma"),
+  prior(normal(0, 0.5), class = "ar")
+  )
+)
+prior_check(priors_ar_fossil, ar_fossil_fuel_fit) + labs(title="AR(1) + Fossil")
+```
+
 
 # 11. Model comparison (e.g. with LOO-CV)
 
-TODO: LFO code and ELPD for all models
+Finally, let's compare all our models using leave-future-out cross validation (LFO). We reserve 10 data points for the models to learn and leave the next points out, adding them one by one. We perform LFO using Pareto sampling to avoid fitting the model several times, for that we create a pareto_lfo function.
+
+```{r}
+log_sum_exp <- function(x) {
+  max_x <- max(x)  
+  max_x + log(sum(exp(x - max_x)))
+}
+
+# more stable than log(mean(exp(x)))
+log_mean_exp <- function(x) {
+  log_sum_exp(x) - log(length(x))
+}
+
+# compute log of raw importance ratios
+# sums over observations *not* over posterior samples
+sum_log_ratios <- function(loglik, ids = NULL) {
+  if (!is.null(ids)) loglik <- loglik[, ids, drop = FALSE]
+  rowSums(loglik)
+}
+
+pareto_lfo <- function(fit, L, data, name) {
+  M <- 1
+  df <- data
+  plot_ks <- function(ks, ids, thres = 0.6) {
+  dat_ks <- data.frame(ks = ks, ids = ids)
+  ggplot(dat_ks, aes(x = ids, y = ks)) + 
+    geom_point(aes(color = ks > thres), shape = 3, show.legend = FALSE) + 
+    geom_hline(yintercept = thres, linetype = 2, color = "red2") + 
+    scale_color_manual(values = c("cornflowerblue", "darkblue")) + 
+    labs(x = "Data point", y = "Pareto k") + 
+    ylim(-0.5, 1.5)
+}
+  
+  N <- length(data$CO2EquivEmission)
+  k_thres <- 0.7
+  approx_elpds_1sap <- rep(NA, N)
+
+# initialize the process for i = L
+past <- 1:L
+oos <- L + 1
+df_past <- df[past,]
+df_oos <- df[c(past, oos),]
+fit_past <- update(fit, newdata = df_past, recompile = FALSE, refresh=0)
+loglik <- log_lik(fit_past, newdata = df_oos, oos = oos)
+approx_elpds_1sap[L + 1] <- log_mean_exp(loglik[, oos])
+
+# iterate over i > L
+i_refit <- L
+refits <- L
+ks <- NULL
+for (i in (L + 1):(N - 1)) {
+  past <- 1:i
+  oos <- i + 1
+  df_past <- df[past,]
+  df_oos <- df[c(past, oos),]
+  loglik <- log_lik(fit_past, newdata = df_oos, oos = oos)
+  
+  logratio <- sum_log_ratios(loglik, (i_refit + 1):i)
+  psis_obj <- suppressWarnings(psis(logratio))
+  k <- suppressWarnings(pareto_k_values(psis_obj))
+  ks <- c(ks, k)
+  if (k > k_thres) {
+    # refit the model based on the first i observations
+    i_refit <- i
+    refits <- c(refits, i)
+    fit_past <- update(fit_past, newdata = df_past, recompile = FALSE, refresh=0)
+    loglik <- log_lik(fit_past, newdata = df_oos, oos = oos)
+    approx_elpds_1sap[i + 1] <- log_mean_exp(loglik[, oos])
+  } else {
+    lw <- weights(psis_obj, normalize = TRUE)[, 1]
+    approx_elpds_1sap[i + 1] <- log_sum_exp(lw + loglik[, oos])
+  }
+} 
+    approx_elpd <- sum(approx_elpds_1sap, na.rm = TRUE)
+    cat(
+    name, " ", "approx LFO ", approx_elpd, "\n"
+    )
+    cat("Using threshold ", k_thres, 
+      ", model was refit ", length(refits), 
+      " times, at observations", refits, "\n")
+}
+```
+
+## 11.1 Linear models
+```{r}
+pareto_lfo(lin_reg_renewable_fit, 10, emission, "LinReg Renewable")
+```
+```{r}
+pareto_lfo(lin_reg_fossil_fuel_fit, 10, emission, "LinReg FossilFuels")
+```
+```{r}
+pareto_lfo(lin_reg_multiple_fix_fit, 10, emission, "LinReg Multiple fix")
+```
+
+## 11.2 Autoregressive models
+```{r}
+pareto_lfo(ar_fit, 10, emission, "AR(1)")
+```
+```{r}
+pareto_lfo(ar_renewable_fit, 10, emission, "AR(1) + Renewable")
+```
+```{r}
+pareto_lfo(ar_fossil_fuel_fit, 10, emission, "AR(1) + Fossil")
+```
+
 
 # 12. Discussion of Issues and Potential Improvements
 
@@ -712,7 +1003,7 @@ us to using relatively basic models and prevents the application of more advance
 techniques, such as hierarchical models.
 
 In addition, the available time series is fairly short, making it challenging to 
-accurately assess the model's predictive performance.Due to the short time series, 
+accurately assess the model's predictive performance. Due to the short time series, 
 our analysis was limited to understanding emissions through their time-series 
 characteristics and their dynamics with production shares of different energy sources. 
 We were unable to make meaningful predictions or forecasts about future emissions

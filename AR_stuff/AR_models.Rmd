@@ -257,7 +257,9 @@ ggarrange(plot1, plot2, plot3, common.legend=TRUE, ncol=3)
 
 # 9. Predictive performance assessment
 
-Below you can find the plots for models' predicitons. The light blue line is the mean, dark-blue shaded area shows the 50% CI and the light-blue area shows the 95
+Below you can find the plots for models' predicitons. The light blue line is the mean, dark-blue shaded area shows the 50% CI and the light-blue area shows the 90% CI. As you can see, the ribbon plots tell us the same story as the posterior density plots above in terms of the models' performance. 
+
+You can also see that the AR(1) model almost reduces to a lag model, with an additional downward trend. The model with the renewable energy production share covariate follows the data better but has still room for improvement. The last model with the fossil fuel covariate fits data the best, which confirms the intuition that the fossil fuel share is the best predictor for the CO2 emission coefficient. 
 
 ```{r}
 p1 <- pp_check(ar_fit, type = "ribbon") + labs(title="AR(1)")
@@ -271,10 +273,14 @@ ggarrange(p1, p2, p3, common.legend=TRUE, ncol=3)
 
 # 10. Sensitivity analysis
 
+On the plots below, you can see posteriors of each parameter for different prior configurations. For the prior configurations, we tried different standard deviations of the normal priors for each parameter. The AR regression coefficient was tried with stds of 0.5, 1, 2. The general mean intercept had stds of 100, 500, 1000. The covariate coefficients had stds of 5, 10, 100. And the variance prior had the stds of 10, 100, 200.
+
+As you can see from the plots, width of priors for all parameters except variance has little effect on the posterior. 
+
 ```{r}
 prior_check <- function(priors, model) {
   draws <- priors %>%
-  map(~ as.matrix(update(ar_fit, prior=.x, seed=seed)))
+  map(~ as.matrix(update(model, prior=.x, seed=seed, refresh=0)))
   
   draws_to_plot <- function(draws) {
     params <- head(colnames(draws[[1]]), -2)
@@ -321,64 +327,65 @@ priors_ar <- list(
     prior(normal(0,500), class="Intercept"),
     prior(normal(0, 100), class = "sigma")
   ),
-  ar3_i250_sigma200=c(
-    prior(normal(0, 3), class = "ar"),
-    prior(normal(0, 250), class="Intercept"),
+  ar0.5_i100_sigma200=c(
+    prior(normal(0, 0.5), class = "ar"),
+    prior(normal(0, 100), class="Intercept"),
     prior(normal(0, 200), class = "sigma")
   )
 )
 
 priors_ar_renewable <- list(
-  ar1_i1000_b50_sigma_10=c(
+  ar1_i1000_b5_sigma_10=c(
   prior(normal(0, 1000), class = "b", coef = "Intercept"),
-  prior(normal(0, 50), class = "b", coef = "RenewableProductionShare"),
+  prior(normal(0, 5), class = "b", coef = "RenewableProductionShare"),
   prior(normal(0, 10), class = "sigma"),
   prior(normal(0, 1), class = "ar")
   ),
-  ar2_i500_b100_sigma_100=c(
+  ar2_i500_b10_sigma_100=c(
   prior(normal(0, 500), class = "b", coef = "Intercept"),
-  prior(normal(0, 100), class = "b", coef = "RenewableProductionShare"),
+  prior(normal(0, 10), class = "b", coef = "RenewableProductionShare"),
   prior(normal(0, 100), class = "sigma"),
   prior(normal(0, 2), class = "ar")
   ),
-  ar3_i250_b200_sigma_250=c(
-  prior(normal(0, 250), class = "b", coef = "Intercept"),
-  prior(normal(0, 200), class = "b", coef = "RenewableProductionShare"),
-  prior(normal(0, 250), class = "sigma"),
-  prior(normal(0, 3), class = "ar")
+  ar0.5_i100_b100_sigma_200=c(
+  prior(normal(0, 100), class = "b", coef = "Intercept"),
+  prior(normal(0, 100), class = "b", coef = "RenewableProductionShare"),
+  prior(normal(0, 200), class = "sigma"),
+  prior(normal(0, 0.5), class = "ar")
   )
 )
 
 priors_ar_fossil <- list(
-  ar1_i1000_b50_sigma_10=c(
+  ar1_i1000_b5_sigma_10=c(
   prior(normal(0, 1000), class = "b", coef = "Intercept"),
-  prior(normal(0, 50), class = "b", coef = "FossilFuelsPeatProductionShare"),
+  prior(normal(0, 5), class = "b", coef = "FossilFuelsPeatProductionShare"),
   prior(normal(0, 10), class = "sigma"),
   prior(normal(0, 1), class = "ar")
   ),
-  ar2_i500_b100_sigma_100=c(
+  ar2_i500_b10_sigma_100=c(
   prior(normal(0, 500), class = "b", coef = "Intercept"),
-  prior(normal(0, 100), class = "b", coef = "FossilFuelsPeatProductionShare"),
+  prior(normal(0, 10), class = "b", coef = "FossilFuelsPeatProductionShare"),
   prior(normal(0, 100), class = "sigma"),
   prior(normal(0, 2), class = "ar")
   ),
-  ar3_i250_b200_sigma_250=c(
-  prior(normal(0, 250), class = "b", coef = "Intercept"),
-  prior(normal(0, 200), class = "b", coef = "FossilFuelsPeatProductionShare"),
-  prior(normal(0, 250), class = "sigma"),
-  prior(normal(0, 3), class = "ar")
+  ar0.5_i100_b100_sigma_200=c(
+  prior(normal(0, 100), class = "b", coef = "Intercept"),
+  prior(normal(0, 100), class = "b", coef = "FossilFuelsPeatProductionShare"),
+  prior(normal(0, 200), class = "sigma"),
+  prior(normal(0, 0.5), class = "ar")
   )
 )
-prior_check(priors_ar, ar_fit)
+prior_check(priors_ar, ar_fit) + labs(title="AR(1)")
 ```
 ```{r}
-prior_check(priors_ar_renewable, ar_renewable_fit)
+prior_check(priors_ar_renewable, ar_renewable_fit) + labs(title="AR(1) + Renewable")
 ```
 ```{r}
-prior_check(priors_ar_fossil, ar_fossil_fuel_fit)
+prior_check(priors_ar_fossil, ar_fossil_fuel_fit) + labs(title="AR(1) + Fossil")
 ```
 
 # 11. Model comparison (e.g. with LOO-CV)
+Finally, let's compare all our models using leave-future-out cross validation (LFO). We reserve 10 data points for the models to learn and leave the next points out, adding them one by one. You can find values for the models below:
 ```{r}
 log_sum_exp <- function(x) {
   max_x <- max(x)  
